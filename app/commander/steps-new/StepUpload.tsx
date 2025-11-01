@@ -314,41 +314,47 @@ export default function StepUpload({ format, onComplete, editingPhoto }: StepUpl
             ) : (
               /* Afficher le mockup avec vidéo jouable */
               <div className="space-y-2">
-                <div className="relative">
-                  {/* Image de fond du mockup */}
+                <div className="relative w-full">
+                  {/* Fond du mockup (toujours visible) */}
                   <img
-                    src={videoMockupPreview}
+                    src="/frontend-pictures/commander/phone-and-picture-portrait-mockup.png"
                     alt="Mockup téléphone"
                     className="w-full h-auto rounded-lg"
-                    style={{ display: isVideoPlaying ? 'none' : 'block' }}
                   />
 
-                  {/* Vidéo jouable dans le mockup */}
+                  {/* Image de la première frame (visible quand vidéo ne joue pas) */}
+                  {!isVideoPlaying && (
+                    <img
+                      src={videoMockupPreview}
+                      alt="Première frame de la vidéo"
+                      className="absolute rounded-[45px]"
+                      style={{
+                        left: '28.5%',
+                        top: '15.8%',
+                        width: '47.7%',
+                        height: '54.2%',
+                        objectFit: 'cover'
+                      }}
+                    />
+                  )}
+
+                  {/* Vidéo (visible quand elle joue) */}
                   {isVideoPlaying && (
-                    <div className="relative w-full">
-                      {/* Fond du mockup */}
-                      <img
-                        src="/frontend-pictures/commander/phone-and-picture-portrait-mockup.png"
-                        alt="Mockup téléphone"
-                        className="w-full h-auto rounded-lg"
-                      />
-                      {/* Vidéo positionnée sur l'écran du téléphone */}
-                      <video
-                        ref={videoRef}
-                        src={videoPreview}
-                        className="absolute rounded-[45px]"
-                        style={{
-                          left: '28.5%',
-                          top: '15.8%',
-                          width: '47.7%',
-                          height: '54.2%',
-                          objectFit: 'cover'
-                        }}
-                        controls
-                        autoPlay
-                        onEnded={() => setIsVideoPlaying(false)}
-                      />
-                    </div>
+                    <video
+                      ref={videoRef}
+                      src={videoPreview}
+                      className="absolute rounded-[45px]"
+                      style={{
+                        left: '28.5%',
+                        top: '15.8%',
+                        width: '47.7%',
+                        height: '54.2%',
+                        objectFit: 'cover'
+                      }}
+                      controls
+                      autoPlay
+                      onEnded={() => setIsVideoPlaying(false)}
+                    />
                   )}
 
                   {/* Bouton Play centré sur l'écran du téléphone */}
