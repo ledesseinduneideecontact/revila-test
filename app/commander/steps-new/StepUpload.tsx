@@ -22,6 +22,10 @@ interface CropConfig {
 export default function StepUpload({ format, onComplete, editingPhoto }: StepUploadProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const videoInputRef = useRef<HTMLInputElement>(null)
+
+  // État de l'étape actuelle (1: vidéo, 2: photo, 3: message)
+  const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1)
+
   const [originalFile, setOriginalFile] = useState<File | null>((editingPhoto as any)?.originalPhotoFile || editingPhoto?.photoFile || null) // Garde la photo originale
   const [croppedFile, setCroppedFile] = useState<File | null>(editingPhoto?.photoFile || null) // Photo recadrée
   const [videoFile, setVideoFile] = useState<File | null>(editingPhoto?.videoFile || null)
@@ -176,8 +180,27 @@ export default function StepUpload({ format, onComplete, editingPhoto }: StepUpl
 
   return (
     <div className="max-w-2xl mx-auto space-y-3 sm:space-y-6">
-      {/* Zone d'upload vidéo */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
+      {/* Indicateur de progression */}
+      <div className="bg-white rounded-xl shadow-lg p-4">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-medium text-gray-700">Étape {currentStep} sur 3</span>
+          <span className="text-sm text-gray-500">
+            {currentStep === 1 && 'Vidéo'}
+            {currentStep === 2 && 'Photo'}
+            {currentStep === 3 && 'Message (optionnel)'}
+          </span>
+        </div>
+        <div className="w-full bg-gray-200 rounded-full h-2">
+          <div
+            className="bg-orange-500 h-2 rounded-full transition-all duration-300"
+            style={{ width: `${(currentStep / 3) * 100}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Étape 1: Zone d'upload vidéo */}
+      {currentStep === 1 && (
+        <div className="bg-white rounded-xl shadow-lg p-6">
         <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
           <Video className="w-5 h-5 text-purple-500" />
           Vidéo associée <span className="text-red-500">*</span>
@@ -227,10 +250,21 @@ export default function StepUpload({ format, onComplete, editingPhoto }: StepUpl
             />
           </div>
         )}
-      </div>
 
-      {/* Zone d'upload photo */}
-      <div className="bg-white rounded-xl shadow-lg p-3 sm:p-6">
+        {/* Bouton Continuer étape 1 */}
+        <Button
+          onClick={() => setCurrentStep(2)}
+          disabled={!videoFile}
+          className="w-full bg-orange-500 hover:bg-orange-600 text-white py-6 text-lg disabled:bg-gray-300 disabled:cursor-not-allowed mt-6"
+        >
+          {!videoFile ? 'Veuillez ajouter une vidéo' : 'Continuer vers la photo'}
+        </Button>
+      </div>
+      )}
+
+      {/* Étape 2: Zone d'upload photo */}
+      {currentStep === 2 && (
+        <div className="bg-white rounded-xl shadow-lg p-3 sm:p-6">
         <h3 className="text-base sm:text-lg font-semibold mb-2 sm:mb-4 flex items-center gap-2">
           <ImageIcon className="w-4 h-4 sm:w-5 sm:h-5 text-orange-500" />
           Votre photo
@@ -312,10 +346,30 @@ export default function StepUpload({ format, onComplete, editingPhoto }: StepUpl
             />
           </div>
         )}
-      </div>
 
-      {/* Message personnalisé (optionnel) - Toggle déroulant */}
-      <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+        {/* Boutons navigation étape 2 */}
+        <div className="flex gap-3 mt-6">
+          <Button
+            onClick={() => setCurrentStep(1)}
+            variant="outline"
+            className="flex-1 py-6 text-lg"
+          >
+            Retour
+          </Button>
+          <Button
+            onClick={() => setCurrentStep(3)}
+            disabled={!croppedFile}
+            className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-6 text-lg disabled:bg-gray-300 disabled:cursor-not-allowed"
+          >
+            {!croppedFile ? 'Veuillez ajouter une photo' : 'Continuer au message'}
+          </Button>
+        </div>
+      </div>
+      )}
+
+      {/* Étape 3: Message personnalisé (optionnel) */}
+      {currentStep === 3 && (
+        <div className="bg-white rounded-xl shadow-lg overflow-hidden">
         <button
           onClick={() => setShowMessage(!showMessage)}
           className="w-full p-6 flex items-center justify-between hover:bg-gray-50 transition-colors"
@@ -375,16 +429,26 @@ export default function StepUpload({ format, onComplete, editingPhoto }: StepUpl
             </div>
           </div>
         )}
-      </div>
 
-      {/* Bouton de validation */}
-      <Button
-        onClick={handleValidate}
-        disabled={!croppedFile || !videoFile}
-        className="w-full bg-orange-500 hover:bg-orange-600 text-white py-6 text-lg disabled:bg-gray-300 disabled:cursor-not-allowed"
-      >
-        {!croppedFile ? 'Veuillez ajouter une photo' : !videoFile ? 'Veuillez ajouter une vidéo' : 'Valider et continuer'}
-      </Button>
+        {/* Boutons navigation étape 3 */}
+        <div className="flex gap-3 mt-6">
+          <Button
+            onClick={() => setCurrentStep(2)}
+            variant="outline"
+            className="flex-1 py-6 text-lg"
+          >
+            Retour
+          </Button>
+          <Button
+            onClick={handleValidate}
+            disabled={!croppedFile || !videoFile}
+            className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-6 text-lg disabled:bg-gray-300 disabled:cursor-not-allowed"
+          >
+            Valider et continuer
+          </Button>
+        </div>
+      </div>
+      )}
 
       {/* Modal de recadrage */}
       {showCropper && originalImageSrc && (
