@@ -5,6 +5,13 @@ import { Plus, Minus, Frame, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import Image from 'next/image'
 import type { CartFormat } from '../CommanderWizardNew'
+import {
+  generateFrameMockup,
+  createMockupPreviewUrl,
+  revokeMockupPreviewUrl,
+  type FrameFormat,
+  type PhotoOrientation
+} from '@/lib/mockup-generator'
 
 interface StepOptionsProps {
   cart: CartFormat[]
@@ -31,6 +38,39 @@ export default function StepOptions({ cart, onUpdateFrames, onNext }: StepOption
     '30x45': 0
   })
 
+  // State for generated mockup previews
+  const [mockupPreviews, setMockupPreviews] = useState<{
+    '10x15': string | null
+    '20x30': string | null
+    '30x45': string | null
+  }>({
+    '10x15': null,
+    '20x30': null,
+    '30x45': null
+  })
+
+  // Loading states per format
+  const [mockupLoading, setMockupLoading] = useState<{
+    '10x15': boolean
+    '20x30': boolean
+    '30x45': boolean
+  }>({
+    '10x15': false,
+    '20x30': false,
+    '30x45': false
+  })
+
+  // Error states per format
+  const [mockupErrors, setMockupErrors] = useState<{
+    '10x15': string | null
+    '20x30': string | null
+    '30x45': string | null
+  }>({
+    '10x15': null,
+    '20x30': null,
+    '30x45': null
+  })
+
   // Calculer le nombre de photos par format
   const photosByFormat = cart.reduce((acc, format) => {
     const totalPhotos = format.photos.reduce((sum, photo) => sum + photo.quantity, 0)
@@ -38,12 +78,128 @@ export default function StepOptions({ cart, onUpdateFrames, onNext }: StepOption
     return acc
   }, {} as Record<string, number>)
 
+  /**
+   * Retrieves the first photo for a given format from the cart
+   * Prefers photos with photoFile (cropped), falls back to originalPhotoFile
+   */
+  const getFirstPhotoForFormat = (format: FrameFormat): {
+    blob: Blob | null
+    orientation: PhotoOrientation
+  } | null => {
+    // Find the cart entry for this format
+    const cartEntry = cart.find(item => item.format === format)
+
+    if (!cartEntry || cartEntry.photos.length === 0) {
+      return null
+    }
+
+    // Get the first photo
+    const firstPhoto = cartEntry.photos[0]
+
+    // Prefer cropped photo, fallback to original
+    const photoBlob = firstPhoto.photoFile || firstPhoto.originalPhotoFile
+
+    if (!photoBlob) {
+      return null
+    }
+
+    // Determine orientation from cropConfig, default to portrait
+    const orientation: PhotoOrientation =
+      firstPhoto.cropConfig?.orientation === 'landscape' ? 'landscape' : 'portrait'
+
+    return {
+      blob: photoBlob,
+      orientation
+    }
+  }
+
   const updateQuantity = (format: keyof FrameSelection, delta: number) => {
     setFrameQuantities(prev => ({
       ...prev,
       [format]: Math.max(0, prev[format] + delta)
     }))
   }
+
+  /**
+   * Generate mockups when component mounts or cart changes
+   * Creates preview for first photo of each format in cart
+   */
+  useEffect(() => {
+    const formats: FrameFormat[] = ['10x15', '20x30', '30x45']
+
+    // Generate mockups for each format that has photos
+    formats.forEach(async (format) => {
+      // Skip if format has no photos
+      if (!photosByFormat[format]) {
+        return
+      }
+
+      // Skip if already generated successfully
+      if (mockupPreviews[format]) {
+        return
+      }
+
+      // Get first photo for this format
+      const photoData = getFirstPhotoForFormat(format)
+
+      if (!photoData) {
+        console.warn(`No photo available for format ${format}`)
+        return
+      }
+
+      // Set loading state
+      setMockupLoading(prev => ({ ...prev, [format]: true }))
+      setMockupErrors(prev => ({ ...prev, [format]: null }))
+
+      try {
+        // Generate the mockup
+        const mockupBlob = await generateFrameMockup(
+          photoData.blob,
+          format,
+          photoData.orientation
+        )
+
+        // Create preview URL
+        const previewUrl = createMockupPreviewUrl(mockupBlob)
+
+        // Update state
+        setMockupPreviews(prev => ({ ...prev, [format]: previewUrl }))
+
+        console.log(`✅ Mockup generated for ${format}`)
+      } catch (error) {
+        console.error(`Error generating mockup for ${format}:`, error)
+        setMockupErrors(prev => ({
+          ...prev,
+          [format]: 'Impossible de générer l\'aperçu'
+        }))
+      } finally {
+        setMockupLoading(prev => ({ ...prev, [format]: false }))
+      }
+    })
+
+    // Cleanup function: revoke blob URLs when component unmounts or cart changes
+    return () => {
+      Object.values(mockupPreviews).forEach(url => {
+        if (url) {
+          revokeMockupPreviewUrl(url)
+        }
+      })
+    }
+  }, [cart, photosByFormat])
+
+  /**
+   * Cleanup blob URLs when component unmounts
+   */
+  useEffect(() => {
+    return () => {
+      // Revoke all preview URLs to free memory
+      Object.values(mockupPreviews).forEach(url => {
+        if (url) {
+          revokeMockupPreviewUrl(url)
+        }
+      })
+    }
+  }, [])
 
   const calculateTotal = () => {
     return Object.entries(frameQuantities).reduce((total, [format, quantity]) => {
@@ -69,17 +225,56 @@ export default function StepOptions({ cart, onUpdateFrames, onNext }: StepOption
           {photosByFormat['10x15'] && (
             <div className="bg-white rounded-xl shadow-lg overflow-hidden">
               <div className="aspect-square bg-gray-100 relative">
-                <img 
-                  src="/images/cadre-10x15-new.png"
-                  alt="Cadre 10×15 cm"
-                  className="w-full h-full object-cover"
-                />
+                {/* Show loading state */}
+                {mockupLoading['10x15'] && (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+                  </div>
+                )}
+
+                {/* Show error state with fallback to static image */}
+                {mockupErrors['10x15'] && !mockupLoading['10x15'] && (
+                  <img
+                    src="/images/cadre-10x15-new.png"
+                    alt="Cadre 10×15 cm"
+                    className="w-full h-full object-cover"
+                  />
+                )}
+
+                {/* Show generated mockup */}
+                {!mockupLoading['10x15'] && !mockupErrors['10x15'] && mockupPreviews['10x15'] ? (
+                  <img
+                    src={mockupPreviews['10x15']}
+                    alt="Aperçu de votre photo encadrée 10×15 cm"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  // Fallback to static image while generating
+                  !mockupLoading['10x15'] && (
+                    <img
+                      src="/images/cadre-10x15-new.png"
+                      alt="Cadre 10×15 cm"
+                      className="w-full h-full object-cover"
+                    />
+                  )
+                )}
+
+                {/* Status badge */}
                 <div className="absolute bottom-2 right-2 bg-black/70 text-white px-2 py-1 rounded text-xs">
-                  Image exemple
+                  {mockupPreviews['10x15'] ? 'Votre photo' : 'Image exemple'}
                 </div>
+
+                {/* Format label */}
                 <div className="absolute top-3 left-3 bg-white/90 px-2 py-1 rounded">
                   <span className="text-sm font-semibold">10×15 cm</span>
                 </div>
+
+                {/* Error indicator (optional) */}
+                {mockupErrors['10x15'] && (
+                  <div className="absolute top-3 right-3 bg-red-500 text-white px-2 py-1 rounded text-xs">
+                    Aperçu indisponible
+                  </div>
+                )}
               </div>
               
               <div className="p-4 space-y-3">
@@ -124,17 +319,56 @@ export default function StepOptions({ cart, onUpdateFrames, onNext }: StepOption
           {photosByFormat['20x30'] && (
             <div className="bg-white rounded-xl shadow-lg overflow-hidden">
               <div className="aspect-square bg-gray-100 relative">
-                <img 
-                  src="/images/cadre-20x30.png"
-                  alt="Cadre 20×30 cm"
-                  className="w-full h-full object-cover"
-                />
+                {/* Show loading state */}
+                {mockupLoading['20x30'] && (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+                  </div>
+                )}
+
+                {/* Show error state with fallback to static image */}
+                {mockupErrors['20x30'] && !mockupLoading['20x30'] && (
+                  <img
+                    src="/images/cadre-20x30.png"
+                    alt="Cadre 20×30 cm"
+                    className="w-full h-full object-cover"
+                  />
+                )}
+
+                {/* Show generated mockup */}
+                {!mockupLoading['20x30'] && !mockupErrors['20x30'] && mockupPreviews['20x30'] ? (
+                  <img
+                    src={mockupPreviews['20x30']}
+                    alt="Aperçu de votre photo encadrée 20×30 cm"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  // Fallback to static image while generating
+                  !mockupLoading['20x30'] && (
+                    <img
+                      src="/images/cadre-20x30.png"
+                      alt="Cadre 20×30 cm"
+                      className="w-full h-full object-cover"
+                    />
+                  )
+                )}
+
+                {/* Status badge */}
                 <div className="absolute bottom-2 right-2 bg-black/70 text-white px-2 py-1 rounded text-xs">
-                  Image exemple
+                  {mockupPreviews['20x30'] ? 'Votre photo' : 'Image exemple'}
                 </div>
+
+                {/* Format label */}
                 <div className="absolute top-3 left-3 bg-white/90 px-2 py-1 rounded">
                   <span className="text-sm font-semibold">20×30 cm</span>
                 </div>
+
+                {/* Error indicator (optional) */}
+                {mockupErrors['20x30'] && (
+                  <div className="absolute top-3 right-3 bg-red-500 text-white px-2 py-1 rounded text-xs">
+                    Aperçu indisponible
+                  </div>
+                )}
               </div>
               
               <div className="p-4 space-y-3">
@@ -179,17 +413,56 @@ export default function StepOptions({ cart, onUpdateFrames, onNext }: StepOption
           {photosByFormat['30x45'] && (
             <div className="bg-white rounded-xl shadow-lg overflow-hidden">
               <div className="aspect-square bg-gray-100 relative">
-                <img 
-                  src="/images/cadre-30x45.png"
-                  alt="Cadre 30×45 cm"
-                  className="w-full h-full object-cover"
-                />
+                {/* Show loading state */}
+                {mockupLoading['30x45'] && (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+                  </div>
+                )}
+
+                {/* Show error state with fallback to static image */}
+                {mockupErrors['30x45'] && !mockupLoading['30x45'] && (
+                  <img
+                    src="/images/cadre-30x45.png"
+                    alt="Cadre 30×45 cm"
+                    className="w-full h-full object-cover"
+                  />
+                )}
+
+                {/* Show generated mockup */}
+                {!mockupLoading['30x45'] && !mockupErrors['30x45'] && mockupPreviews['30x45'] ? (
+                  <img
+                    src={mockupPreviews['30x45']}
+                    alt="Aperçu de votre photo encadrée 30×45 cm"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  // Fallback to static image while generating
+                  !mockupLoading['30x45'] && (
+                    <img
+                      src="/images/cadre-30x45.png"
+                      alt="Cadre 30×45 cm"
+                      className="w-full h-full object-cover"
+                    />
+                  )
+                )}
+
+                {/* Status badge */}
                 <div className="absolute bottom-2 right-2 bg-black/70 text-white px-2 py-1 rounded text-xs">
-                  Image exemple
+                  {mockupPreviews['30x45'] ? 'Votre photo' : 'Image exemple'}
                 </div>
+
+                {/* Format label */}
                 <div className="absolute top-3 left-3 bg-white/90 px-2 py-1 rounded">
                   <span className="text-sm font-semibold">30×45 cm</span>
                 </div>
+
+                {/* Error indicator (optional) */}
+                {mockupErrors['30x45'] && (
+                  <div className="absolute top-3 right-3 bg-red-500 text-white px-2 py-1 rounded text-xs">
+                    Aperçu indisponible
+                  </div>
+                )}
               </div>
               
               <div className="p-4 space-y-3">
