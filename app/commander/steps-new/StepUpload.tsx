@@ -176,91 +176,6 @@ export default function StepUpload({ format, onComplete, editingPhoto }: StepUpl
 
   return (
     <div className="max-w-2xl mx-auto space-y-3 sm:space-y-6">
-      {/* Zone d'upload photo */}
-      <div className="bg-white rounded-xl shadow-lg p-3 sm:p-6">
-        <h3 className="text-base sm:text-lg font-semibold mb-2 sm:mb-4 flex items-center gap-2">
-          <ImageIcon className="w-4 h-4 sm:w-5 sm:h-5 text-orange-500" />
-          Votre photo
-        </h3>
-
-        {!croppedPreview ? (
-          <div
-            className={`border-2 border-dashed rounded-lg p-4 sm:p-8 text-center transition-colors ${
-              dragActive ? 'border-orange-500 bg-orange-50' : 'border-gray-300 hover:border-gray-400'
-            }`}
-            onDragEnter={handleDrag}
-            onDragLeave={handleDrag}
-            onDragOver={handleDrag}
-            onDrop={handleDrop}
-          >
-            <Upload className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-            <p className="text-gray-600 mb-2">Glissez votre photo ici ou</p>
-            <Button
-              onClick={() => fileInputRef.current?.click()}
-              variant="outline"
-            >
-              Choisir une photo
-            </Button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handlePhotoChange}
-            />
-            <p className="text-xs text-gray-500 mt-4">
-              Formats acceptés : JPEG, PNG, WebP (max 200 MB)
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="relative">
-              <div 
-                className="w-full rounded-lg bg-gray-100 overflow-hidden"
-                style={{ 
-                  aspectRatio: format === 'carre' ? '1 / 1' : (orientation === 'portrait' ? '1 / 1.5' : '1.5 / 1')
-                }}
-              >
-                <img
-                  src={croppedPreview}
-                  alt="Aperçu recadré"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-lg shadow-sm">
-                <span className="text-xs font-medium text-gray-700">
-                  {orientation === 'portrait' ? 'Portrait' : 'Paysage'}
-                </span>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                onClick={() => fileInputRef.current?.click()}
-                variant="outline"
-                className="flex-1"
-              >
-                Changer la photo
-              </Button>
-              <Button
-                onClick={openRecrop}
-                variant="outline"
-                size="icon"
-                title="Recadrer à nouveau"
-              >
-                <Crop className="w-4 h-4" />
-              </Button>
-            </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handlePhotoChange}
-            />
-          </div>
-        )}
-      </div>
-
       {/* Zone d'upload vidéo */}
       <div className="bg-white rounded-xl shadow-lg p-6">
         <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
@@ -309,6 +224,91 @@ export default function StepUpload({ format, onComplete, editingPhoto }: StepUpl
               accept="video/*"
               className="hidden"
               onChange={handleVideoChange}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Zone d'upload photo */}
+      <div className="bg-white rounded-xl shadow-lg p-3 sm:p-6">
+        <h3 className="text-base sm:text-lg font-semibold mb-2 sm:mb-4 flex items-center gap-2">
+          <ImageIcon className="w-4 h-4 sm:w-5 sm:h-5 text-orange-500" />
+          Votre photo
+        </h3>
+
+        {!croppedPreview ? (
+          <div
+            className={`border-2 border-dashed rounded-lg p-4 sm:p-8 text-center transition-colors ${
+              dragActive ? 'border-orange-500 bg-orange-50' : 'border-gray-300 hover:border-gray-400'
+            }`}
+            onDragEnter={handleDrag}
+            onDragLeave={handleDrag}
+            onDragOver={handleDrag}
+            onDrop={handleDrop}
+          >
+            <Upload className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+            <p className="text-gray-600 mb-2">Glissez votre photo ici ou</p>
+            <Button
+              onClick={() => fileInputRef.current?.click()}
+              variant="outline"
+            >
+              Choisir une photo
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handlePhotoChange}
+            />
+            <p className="text-xs text-gray-500 mt-4">
+              Formats acceptés : JPEG, PNG, WebP (max 200 MB)
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="relative">
+              <div
+                className="w-full rounded-lg bg-gray-100 overflow-hidden"
+                style={{
+                  aspectRatio: format === 'carre' ? '1 / 1' : (orientation === 'portrait' ? '1 / 1.5' : '1.5 / 1')
+                }}
+              >
+                <img
+                  src={croppedPreview}
+                  alt="Aperçu recadré"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-lg shadow-sm">
+                <span className="text-xs font-medium text-gray-700">
+                  {orientation === 'portrait' ? 'Portrait' : 'Paysage'}
+                </span>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => fileInputRef.current?.click()}
+                variant="outline"
+                className="flex-1"
+              >
+                Changer la photo
+              </Button>
+              <Button
+                onClick={openRecrop}
+                variant="outline"
+                size="icon"
+                title="Recadrer à nouveau"
+              >
+                <Crop className="w-4 h-4" />
+              </Button>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handlePhotoChange}
             />
           </div>
         )}
