@@ -1,0 +1,52 @@
+Mentions légales – Revila (revila.fr)
+
+Éditeur du site
+Le site revila.fr est édité par la société ALOA SAS, au capital de 1 000 € (susceptible d’évoluer), immatriculée au Registre du Commerce et des Sociétés d’Angers sous le numéro 901 420 836, dont le siège social est situé au 267 rue haute des Banchais, 49000 Angers, France.
+Directeur de la publication : Henri Barraya, en qualité de Directeur Général.
+Adresse e-mail : contact@revila.fr
+Téléphone : non communiqué.
+
+Hébergeur technique : Railway (Railway Corporation)
+Adresse fournie par Railway pour ses mentions légales (DMCA Designated Agent) : 548 Market St PMB 68956, San Francisco, CA 94104, USA 
+colasrail.com
+Railway
+.
+
+Enregistrement du nom de domaine :
+Le nom de domaine revila.fr a été enregistré via Gandi SAS, située au 63‑65 boulevard Masséna, 75013 Paris, France, immatriculée RCS Paris n° 423 093 459, TVA intracommunautaire FR81423093459 
+nic.at
++7
+Gandi.net
++7
+Gandi.net
++7
+.
+
+Propriété intellectuelle
+
+Le contenu du site (textes, images, logos, visuels, charte graphique, etc.) est protégé par la législation française et internationale sur le droit d’auteur et la propriété intellectuelle. Toute reproduction, représentation, modification ou utilisation, en tout ou partie, sans l'autorisation expresse de ALOA SAS (Revila) est interdite et engage la responsabilité de son auteur.
+
+Données personnelles (RGPD)
+
+En utilisant le site revila.fr, vous consentez au traitement de vos données personnelles par ALOA SAS, notamment dans les cas suivants :
+
+Création de compte, traitement des commandes, communication (via Supabase) ;
+
+Stockage sécurisé des données (photos, informations de commande) sur Google Cloud Storage.
+
+Ces données ne sont utilisées que pour la gestion des commandes, la relation client ou des obligations légales. Elles ne sont pas revendues à des tiers.
+Vous bénéficiez des droits suivants : accéder, rectifier, supprimer vos données ou vous opposer à leur traitement, selon le RGPD. Pour exercer ces droits, adressez une demande à contact@revila.fr.
+Un responsable de traitement (DPO) n’a pas été désigné pour l’instant.
+
+Cookies et traceurs
+
+Actuellement, aucun cookie de suivi (type Google Analytics ou pixels publicitaires) n’est mis en place. Des cookies techniques peuvent être utilisés pour le bon fonctionnement du panier ou de la session utilisateur, mais aucune utilisation de traceurs à des fins publicitaires n’est effectuée pour l’instant.
+
+Médiation de la consommation
+
+Conformément au Code de la consommation, en cas de litige, le Client est invité à contacter ALOA SAS (Revila) en priorité pour tenter de régler le différend à l’amiable.
+À défaut d’accord, le consommateur peut recourir à un médiateur de la consommation. Un médiateur territorial pertinent est le Médiateur de la Consommation du Maine-et-Loire ou équivalent (Angers) — je peux t’aider à identifier précisément l’organisme compétent si tu me confirmes ton département ou région.
+
+Droit applicable
+
+Les présentes mentions légales sont régies par la loi française. Tout litige relevant de l’interprétation ou de l’exécution des présentes sera de la compétence des juridictions françaises.

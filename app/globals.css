@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    background-color: #faf8f5;
+  }
+}
+
+/* Animations flip en 2 temps (paysage -> portrait -> dos) et inverse */
+@keyframes two-step-landscape-to-back {
+  0%   { transform: rotateY(0deg) rotateZ(0deg) scale(1); }
+  40%  { transform: rotateY(0deg) rotateZ(90deg) scale(1.12); }
+  50%  { transform: rotateY(90deg) rotateZ(90deg) scale(1.12); }
+  100% { transform: rotateY(180deg) rotateZ(0deg) scale(1); }
+}
+
+@keyframes two-step-landscape-to-front {
+  0%   { transform: rotateY(180deg) rotateZ(0deg) scale(1); }
+  40%  { transform: rotateY(90deg) rotateZ(90deg) scale(1.12); }
+  50%  { transform: rotateY(0deg) rotateZ(90deg) scale(1.12); }
+  100% { transform: rotateY(0deg) rotateZ(0deg) scale(1); }
+}
+
+.twostep-landscape-to-back { animation: two-step-landscape-to-back 1000ms cubic-bezier(.2,.8,.2,1) forwards; }
+.twostep-landscape-to-front { animation: two-step-landscape-to-front 1000ms cubic-bezier(.2,.8,.2,1) forwards; }
+
+/* Nudge de 3 secondes pour guider la saisie */
+@keyframes nudge-fade {
+  0% { opacity: 0; transform: translateY(-6px); }
+  10% { opacity: 1; transform: translateY(0); }
+  90% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.nudge-3s { animation: nudge-fade 3s ease-out 1; }
+
+/* Classes pour optimisation mobile - scroll rétabli */
+@media (max-width: 768px) {
+  .mobile-vh-full {
+    height: 100vh;
+    height: 100dvh; /* Dynamic viewport height pour mobile */
+    max-height: -webkit-fill-available;
+  }
+  
+  .mobile-no-scroll {
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+  }
+  
+  /* Conteneur pour les onglets commander - scroll autorisé */
+  .commander-mobile-container {
+    display: flex;
+    flex-direction: column;
+    min-height: calc(100vh - 80px); /* min-height au lieu de height fixe */
+    min-height: calc(100dvh - 80px);
+    /* overflow: hidden; */ /* Commenté pour permettre le scroll */
+  }
+  
+  .commander-content {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}

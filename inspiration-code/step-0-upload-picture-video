@@ -1,0 +1,289 @@
+# Fix: Use two distinct cursors (one for photo path, one for video path) so the cursor
+# goes from "photo.jpg" -> "Ta photo", then "vacances.mp4" -> "Ta vidéo"
+# (no more double video-path issue). Rings and motion remain unchanged.
+html = r"""<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>REVELO — DnD Explorer (Cursors per path + Guided Rings)</title>
+<style>
+  :root{
+    --size: 700px;
+    --u: calc(var(--size) / 30);
+    --ink:#0f172a;
+    --muted:#6b7280;
+    --bg: transparent;
+    --card:#ffffff;
+    --panel:#f7f8fc;
+    --edge:#e6e9f7;
+    --field:#f5f7fd;
+    --green:#58cc02;
+    --blue:#2b70f7;
+    --shadow-card: 0 18px 40px rgba(18,22,55,.14);
+    --shadow-panel: 0 12px 28px rgba(18,22,55,.12);
+  }
+
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial}
+  .stage{height:100%;display:grid;place-items:center}
+
+  .canvas{
+    width: min(var(--size), 94vw); height: min(var(--size), 94vw);
+    position: relative; background: transparent; overflow: visible;
+  }
+
+  /* Card (right) */
+  .card{ position:absolute; right: 2%; top: 6%; width: calc(15 * var(--u)); padding: calc(1.2 * var(--u)); border-radius: 20px; background: var(--card); box-shadow: var(--shadow-card); }
+  .group{ margin-bottom: calc(1.2 * var(--u)); }
+  .label{ font-weight: 800; font-size: calc(.72 * var(--u)); color: var(--muted); margin: 0 0 calc(.4 * var(--u)) calc(.2 * var(--u)); }
+  .field{ height: calc(2.2 * var(--u)); border-radius: 14px; background: var(--field); display:flex; align-items:center; gap:12px; padding: 0 calc(.8 * var(--u)); position:relative; overflow:hidden; transform: translateZ(0); }
+  .field .icon{ width: calc(1.4 * var(--u)); height: calc(1.4 * var(--u)); border-radius: 12px; display:grid; place-items:center; flex: 0 0 auto; }
+  .icon.photo{ background: linear-gradient(180deg,#c7f0ff,#8dd3ff); }
+  .icon.photo::before{ content:""; width: 70%; height: 52%; border-radius: 6px; background: linear-gradient(180deg,#67c3ff,#3ea4f0);
+    -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><path d=%22M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm0 0%22 fill=%22black%22/><circle cx=%228%22 cy=%229%22 r=%222%22 fill=%22black%22/><path d=%22M3 16l5-4 3 3 4-4 6 5v3H3z%22 fill=%22black%22/></svg>') center/contain no-repeat;
+            mask: url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><path d=%22M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm0 0%22 fill=%22black%22/><circle cx=%228%22 cy=%229%22 r=%222%22 fill=%22black%22/><path d=%22M3 16l5-4 3 3 4-4 6 5v3H3z%22 fill=%22black%22/></svg>') center/contain no-repeat; }
+  .icon.video{ background: linear-gradient(180deg,#ffd7ec,#f8b7d2); }
+  .icon.video::before{ content:""; width: 60%; height: 60%; background:#fff; clip-path: polygon(35% 25%, 35% 75%, 78% 50%); }
+  .txt{ font-weight: 800; font-size: calc(.72 * var(--u)); color:#2d61ff; opacity:.95; white-space:nowrap; }
+  .txt.ok-photo{ color: var(--green); }
+  .txt.ok-video{ color: var(--blue); }
+  .badge{ min-width: calc(1.2 * var(--u)); height: calc(1.2 * var(--u)); border-radius: 12px; display:grid; place-items:center; color:#fff; font-weight:900; font-size: calc(.72 * var(--u)); transform: scale(.9); opacity:0; }
+  .badge.check{ background: var(--green); }
+  .badge.dl{ background: var(--blue); }
+  .glow{ position:absolute; inset:0; border-radius: 14px; border:2px dashed rgba(43,112,247,.0); box-sizing:border-box; pointer-events:none; }
+  .card.drop-photo .photo-field{ animation: scalePulse .35s ease-out forwards; }
+  .card.drop-photo .photo-field .glow{ animation: glow .5s ease-out forwards; }
+  .card.drop-video .video-field{ animation: scalePulse .35s ease-out forwards; }
+  .card.drop-video .video-field .glow{ animation: glow .5s ease-out forwards; }
+  @keyframes glow{ 0%{ border-color: rgba(43,112,247,.0); box-shadow: 0 0 0 0 rgba(43,112,247,.0);} 40%{ border-color: rgba(43,112,247,.55); box-shadow: 0 0 0 6px rgba(43,112,247,.10);} 100%{ border-color: rgba(43,112,247,.0); box-shadow: 0 0 0 0 rgba(43,112,247,.0);} }
+  @keyframes scalePulse{ 0%{ transform: scale(1);} 60%{ transform: scale(1.02);} 100%{ transform: scale(1);} }
+
+  /* Explorer (left) */
+  .explorer{ position:absolute; left: 2%; bottom: 4%; width: calc(16 * var(--u)); height: calc(18 * var(--u)); border-radius: 16px; background: var(--panel); border: 1px solid var(--edge); box-shadow: var(--shadow-panel); display:grid; grid-template-rows: auto 1fr; overflow:hidden; }
+  .toolbar{ display:flex; align-items:center; gap:10px; padding: 10px 12px; background: linear-gradient(180deg,#fff,#f4f6ff); border-bottom: 1px solid var(--edge); }
+  .dot{ width:10px; height:10px; border-radius:50%; background:#e5e7eb; }
+  .path{ flex:1; font-weight:700; font-size: 12px; color:#374151; padding: 6px 10px; background:#fff; border-radius: 10px; border:1px solid #e6e9f7; }
+  .search{ width: 26px; height:26px; border-radius:8px; background:#fff; border:1px solid #e6e9f7; }
+
+  .grid{ padding: 12px; display:grid; grid-template-columns: repeat(2, 1fr); gap: 12px; align-content:start; }
+  .tile{ height: calc(3.6 * var(--u)); border-radius: 14px; background:#fff; border:1px solid #e6e9f7; display:grid; grid-template-columns: auto 1fr auto; align-items:center; gap:12px; padding: 10px 12px; position:relative; transition: transform .2s ease, box-shadow .2s ease; }
+  .tile:hover{ transform: translateY(-2px); box-shadow: 0 10px 18px rgba(0,0,0,.08); }
+  .file-icon{ width: calc(1.6 * var(--u)); height: calc(1.6 * var(--u)); border-radius: 12px; display:grid; place-items:center; color:#fff; }
+  .file-icon.photo{ background: linear-gradient(180deg,#8ed3ff,#4fb7ff); }
+  .file-icon.photo::before{ content:""; width: 72%; height: 58%; background:#fff; display:block; margin:auto; transform: translateY(20%);
+    -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><path d=%22M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm0 0%22 fill=%22black%22/><circle cx=%228%22 cy=%229%22 r=%222%22 fill=%22black%22/><path d=%22M3 16l5-4 3 3 4-4 6 5v3H3z%22 fill=%22black%22/></svg>') center/contain no-repeat;
+            mask: url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><path d=%22M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm0 0%22 fill=%22black%22/><circle cx=%228%22 cy=%229%22 r=%222%22 fill=%22black%22/><path d=%22M3 16l5-4 3 3 4-4 6 5v3H3z%22 fill=%22black%22/></svg>') center/contain no-repeat; }
+  .file-icon.video{ background: linear-gradient(180deg,#ff9dc7,#ff6ea9); }
+  .file-icon.video::before{ content:""; width:60%; height:60%; background:#fff; display:block; margin:auto; transform: translateY(20%); clip-path: polygon(35% 25%, 35% 75%, 78% 50%); }
+  .meta{ display:flex; flex-direction:column; gap:4px; }
+  .name{ font-weight:800; font-size: 13px; color:#111827; letter-spacing:.2px; }
+  .ext{ font-weight:700; font-size: 11px; color:#6b7280; }
+  .badge-ext{ min-width: 34px; height: 24px; border-radius: 8px; display:grid; place-items:center; font-weight:800; font-size: 11px; color:#fff; padding: 0 6px; }
+  .badge-ext.jpg{ background: #0ea5e9; }
+  .badge-ext.mp4{ background: #ef4444; }
+
+  /* Cursors + Ghost motion path */
+  .cursor{ width: 22px; height:22px; border: 3px solid #111; border-radius: 50%; background:#fff; position:absolute; left:0; top:0; opacity:0; offset-distance: 0%; offset-rotate: 0deg; box-shadow: 0 4px 12px rgba(0,0,0,.18); }
+  .cursor.p{ } .cursor.v{ }
+  .ghost{ position:absolute; left:0; top:0; width: calc(7.4 * var(--u)); height: calc(2.2 * var(--u)); border-radius: 12px; background:#fff; border:1px solid #e6e9f7; display:grid; grid-template-columns:auto 1fr; gap:12px; align-items:center; padding: 10px 12px; opacity:0; box-shadow: 0 12px 22px rgba(0,0,0,.18); offset-distance: 0%; offset-rotate: 0deg; }
+  .ghost .gicon{ width: calc(1.6 * var(--u)); height: calc(1.6 * var(--u)); border-radius: 12px; }
+  .ghost.photo .gicon{ background: linear-gradient(180deg,#8ed3ff,#4fb7ff); }
+  .ghost.photo .gicon::before{ content:""; width: 72%; height: 58%; background:#fff; display:block; margin:auto; transform: translateY(20%); -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><path d=%22M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm0 0%22 fill=%22black%22/><circle cx=%228%22 cy=%229%22 r=%222%22 fill=%22black%22/><path d=%22M3 16l5-4 3 3 4-4 6 5v3H3z%22 fill=%22black%22/></svg>') center/contain no-repeat; mask: url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><path d=%22M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm0 0%22 fill=%22black%22/><circle cx=%228%22 cy=%229%22 r=%222%22 fill=%22black%22/><path d=%22M3 16l5-4 3 3 4-4 6 5v3H3z%22 fill=%22black%22/></svg>') center/contain no-repeat; }
+  .ghost.video .gicon{ background: linear-gradient(180deg,#ff9dc7,#ff6ea9); }
+  .ghost.video .gicon::before{ content:""; width:60%; height:60%; background:#fff; display:block; margin:auto; transform: translateY(20%); clip-path: polygon(35% 25%, 35% 75%, 78% 50%); }
+  .ghost .gname{ font: 800 12px/1 Inter, ui-sans-serif; color:#111; }
+
+  /* Timeline */
+  .canvas.play .cursor.p{ animation: cursorP 1.2s linear forwards; }
+  .canvas.play .cursor.v{ animation: cursorV 1.2s linear 1.2s forwards; }
+  .canvas.play .ghost.photo{ animation: ghostPhoto 1.2s cubic-bezier(.22,.72,.16,1) forwards; }
+  .canvas.play .ghost.video{ animation: ghostVideo 1.2s cubic-bezier(.22,.72,.16,1) 1.2s forwards; }
+  .canvas.play .photo-field .txt.add{ animation: fadeOut .12s ease-out 1.0s forwards; }
+  .canvas.play .photo-field .txt.ok-photo{ animation: fadeIn .28s cubic-bezier(.2,.8,.16,1) 1.05s forwards; }
+  .canvas.play .photo-field .badge.check{ animation: popIn .28s cubic-bezier(.2,.8,.16,1) 1.05s forwards; }
+  .canvas.play .card{ animation: markPhoto .001s linear 1.05s forwards; }
+  .canvas.play .video-field .txt.add{ animation: fadeOut .12s ease-out 2.1s forwards; }
+  .canvas.play .video-field .txt.ok-video{ animation: fadeIn .28s cubic-bezier(.2,.8,.16,1) 2.15s forwards; }
+  .canvas.play .video-field .badge.dl{ animation: popIn .28s cubic-bezier(.2,.8,.16,1) 2.15s forwards; }
+  .canvas.play .card{ animation: markVideo .001s linear 2.15s forwards; }
+
+  @keyframes fadeOut{ to{ opacity:0; transform: translateY(-2px);} }
+  @keyframes fadeIn{ from{ opacity:0; transform: translateY(2px);} to{ opacity:1; transform:none;} }
+  @keyframes popIn{ from{ transform: scale(.85); opacity:0;} to{ transform: scale(1); opacity:1;} }
+  @keyframes ghostPhoto{ 0%{ opacity:0; offset-distance: 0%; } 8%{ opacity:1; } 60%{ offset-distance: 70%; } 100%{ offset-distance: 100%; opacity:0; } }
+  @keyframes ghostVideo{ 0%{ opacity:0; offset-distance: 0%; } 8%{ opacity:1; } 60%{ offset-distance: 70%; } 100%{ offset-distance: 100%; opacity:0; } }
+  @keyframes cursorP{ 0%{ opacity:0; offset-distance: 0%; } 6%{ opacity:1; } 100%{ offset-distance: 100%; opacity:0; } }
+  @keyframes cursorV{ 0%{ opacity:0; offset-distance: 0%; } 6%{ opacity:1; } 100%{ offset-distance: 100%; opacity:0; } }
+
+  /* Guided click rings */
+  .ring{ position:absolute; width: 24px; height:24px; border: 3px solid rgba(17,17,17,.9); border-radius:50%; left:0; top:0;
+         transform: translate3d(var(--rx,0), var(--ry,0), 0) scale(0.2); opacity:0; pointer-events:none; }
+  .ring.blue{ border-color: rgba(43,112,247,.95); }
+  .ring.green{ border-color: rgba(88,204,2,.95); }
+  .ring.play{ animation: ringPulse .5s ease-out forwards; }
+  @keyframes ringPulse{ 0%{ opacity:0; transform: translate3d(var(--rx), var(--ry), 0) scale(.2); } 10%{ opacity:1; } 60%{ transform: translate3d(var(--rx), var(--ry), 0) scale(1.15); } 100%{ opacity:0; transform: translate3d(var(--rx), var(--ry), 0) scale(1.3); } }
+
+  @media (prefers-reduced-motion: reduce){
+    .canvas *{ animation:none !important; transition:none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <div class="canvas" id="canvas" aria-label="Explorateur de fichiers : drag photo → Ta photo, puis vidéo → Ta vidéo">
+    <!-- Explorer -->
+    <div class="explorer" id="explorer">
+      <div class="toolbar">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        <div class="path">Fichiers ▸ Téléchargements</div>
+        <div class="search" aria-hidden="true"></div>
+      </div>
+      <div class="grid">
+        <div class="tile" id="tilePhoto">
+          <div class="file-icon photo"></div>
+          <div class="meta">
+            <div class="name">photo.jpg</div>
+            <div class="ext">Image JPEG</div>
+          </div>
+          <div class="badge-ext jpg">JPG</div>
+        </div>
+
+        <div class="tile" id="tileVideo">
+          <div class="file-icon video"></div>
+          <div class="meta">
+            <div class="name">vacances.mp4</div>
+            <div class="ext">Vidéo MP4</div>
+          </div>
+          <div class="badge-ext mp4">MP4</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Drop Card -->
+    <div class="card" id="card">
+      <div class="group photo-field">
+        <div class="label">Ta photo</div>
+        <div class="field" id="fieldPhoto">
+          <div class="icon photo"></div>
+          <div class="txt add">Ajoute ici</div>
+          <div class="txt ok ok-photo" style="opacity:0;">Photo ajoutée</div>
+          <div class="badge check">✓</div>
+          <div class="glow"></div>
+        </div>
+      </div>
+
+      <div class="group video-field">
+        <div class="label">Ta vidéo</div>
+        <div class="field" id="fieldVideo">
+          <div class="icon video"></div>
+          <div class="txt add">Ajoute ici</div>
+          <div class="txt ok ok-video" style="opacity:0;">Vidéo ajoutée</div>
+          <div class="badge dl">✓</div>
+          <div class="glow"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cursors + Ghosts -->
+    <div class="cursor p" id="cursorP"></div>
+    <div class="cursor v" id="cursorV"></div>
+    <div class="ghost photo" id="ghostPhoto"><div class="gicon"></div><div class="gname">photo.jpg</div></div>
+    <div class="ghost video" id="ghostVideo"><div class="gicon"></div><div class="gname">vacances.mp4</div></div>
+
+    <!-- Guided click rings -->
+    <div class="ring blue" id="ringPickPhoto"></div>
+    <div class="ring green" id="ringDropPhoto"></div>
+    <div class="ring blue" id="ringPickVideo"></div>
+    <div class="ring green" id="ringDropVideo"></div>
+  </div>
+</div>
+
+<script>
+  (function(){
+    const canvas = document.getElementById('canvas');
+    const card = document.getElementById('card');
+    const gPhoto = document.getElementById('ghostPhoto');
+    const gVideo = document.getElementById('ghostVideo');
+    const cursorP = document.getElementById('cursorP');
+    const cursorV = document.getElementById('cursorV');
+    const tilePhoto = document.getElementById('tilePhoto');
+    const tileVideo = document.getElementById('tileVideo');
+    const fieldPhoto = document.getElementById('fieldPhoto');
+    const fieldVideo = document.getElementById('fieldVideo');
+
+    const ringPickPhoto = document.getElementById('ringPickPhoto');
+    const ringDropPhoto = document.getElementById('ringDropPhoto');
+    const ringPickVideo = document.getElementById('ringPickVideo');
+    const ringDropVideo = document.getElementById('ringDropVideo');
+
+    function pt(el, dx=0, dy=0){
+      const c = canvas.getBoundingClientRect();
+      const r = el.getBoundingClientRect();
+      return { x: r.left - c.left + dx, y: r.top - c.top + dy };
+    }
+    function pathFromTo(a, b){
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const c1 = { x: a.x + dx*0.35, y: a.y + dy*0.05 };
+      const c2 = { x: a.x + dx*0.65, y: a.y + dy*0.95 - 10 };
+      return `path('M ${a.x},${a.y} C ${c1.x},${c1.y} ${c2.x},${c2.y} ${b.x},${b.y}')`;
+    }
+    function placeRing(el, x, y){
+      el.style.setProperty('--rx', x+'px');
+      el.style.setProperty('--ry', y+'px');
+    }
+
+    function layout(){
+      const size = Math.min(window.innerWidth * 0.94, window.innerHeight * 0.94, 780);
+      document.documentElement.style.setProperty('--size', size + 'px');
+
+      // points
+      const pStart = pt(tilePhoto, 24, 22);
+      const pDrop  = pt(fieldPhoto, 22, 20);
+      const vStart = pt(tileVideo, 24, 22);
+      const vDrop  = pt(fieldVideo, 22, 20);
+
+      // motion paths
+      const pathP = pathFromTo(pStart, pDrop);
+      const pathV = pathFromTo(vStart, vDrop);
+      gPhoto.style.offsetPath = pathP;
+      gVideo.style.offsetPath = pathV;
+      cursorP.style.offsetPath = pathP;
+      cursorV.style.offsetPath = pathV;
+
+      // ring positions
+      placeRing(ringPickPhoto, pStart.x, pStart.y);
+      placeRing(ringDropPhoto, pDrop.x, pDrop.y);
+      placeRing(ringPickVideo, vStart.x, vStart.y);
+      placeRing(ringDropVideo, vDrop.x, vDrop.y);
+    }
+    layout();
+    window.addEventListener('resize', layout, {passive:true});
+
+    function play(){
+      canvas.classList.remove('play'); void canvas.offsetWidth; canvas.classList.add('play');
+      [ringPickPhoto, ringDropPhoto, ringPickVideo, ringDropVideo].forEach(r=> r.classList.remove('play'));
+      setTimeout(()=> ringPickPhoto.classList.add('play'), 80);
+      setTimeout(()=> ringDropPhoto.classList.add('play'), 1000);
+      setTimeout(()=> ringPickVideo.classList.add('play'), 1280);
+      setTimeout(()=> ringDropVideo.classList.add('play'), 2200);
+
+      // Glow highlights sync
+      card.classList.remove('drop-photo','drop-video');
+      setTimeout(()=> card.classList.add('drop-photo'), 1000);
+      setTimeout(()=> card.classList.remove('drop-photo'), 1450);
+      setTimeout(()=> card.classList.add('drop-video'), 2140);
+      setTimeout(()=> card.classList.remove('drop-video'), 2580);
+    }
+
+    canvas.addEventListener('mouseenter', play);
+    canvas.addEventListener('click', (e)=>{ e.preventDefault(); play(); });
+  })();
+</script>
+
+</body>
+</html>
+"""
+with open("/mnt/data/revelo-dnd-explorer-to-fields-cursors-fixed.html","w", encoding="utf-8") as f:
+    f.write(html)
+print("Saved to /mnt/data/revelo-dnd-explorer-to-fields-cursors-fixed.html")

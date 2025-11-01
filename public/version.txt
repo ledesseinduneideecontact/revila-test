@@ -1,0 +1,8 @@
+Version: 2025-08-21-v3
+Commit: 2219c8e
+Features:
+- Menu mobile avec trois points (MoreVertical)
+- Header transparent sur mobile
+- Menu déroulant: Concept, Guide, Mariage
+- Corrections TypeScript CartSummary
+Deployed: 2025-08-21 17:00Last sync: 2025-08-21 17:04:37

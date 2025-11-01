@@ -1,0 +1,10 @@
+[33m51bd5f6[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m Hero section 100vh avec header transparent et responsive
+[33ma7911a1[m Amélioration UI : titres plus grands et images plus larges dans la section 'Comment ça marche ?'
+[33md9b172e[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Ajout barre d'onglets moderne avec navigation vers les sections
+[33m74b0b98[m Ajout fonctionnalité coupon NOEL - 15% de réduction
+[33m7b772aa[m  Version finale - Application complète avec Docker, N8N et toutes les fonctionnalités
+[33m195288d[m Fix Docker: correct port to 3002 and use standalone server for Next.js output
+[33m4342808[m Fix Docker build: remove deprecated appDir config and add build environment variables
+[33mf8aa772[m Add optimized Dockerfile and .dockerignore for Next.js production deployment
+[33mc715674[m Fix Next.js build error: configure output and disable static error page generation
+[33meb41b91[m Build successful - all TypeScript errors fixed

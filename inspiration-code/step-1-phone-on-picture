@@ -1,0 +1,79 @@
+<!-- Animation 1 — Téléphone qui arrive sur la photo (arrivée uniquement, sans texte ni bulle) -->
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Animation 1 — Arrivée du téléphone</title>
+<style>
+  :root{ --ink:#0f172a; --bg:#eef3ff; --t-arrive:1100ms; }
+  html,body{height:100%;margin:0;background:radial-gradient(1200px 800px at 50% -10%,#fff,var(--bg));color:var(--ink);font-family:Inter,ui-sans-serif,-apple-system,Segoe UI,Roboto,Arial}
+  .demo{width:860px;max-width:96vw;aspect-ratio:16/9;background:linear-gradient(180deg,#fff,#fafcff);border-radius:24px;box-shadow:0 16px 48px rgba(15,23,42,.16);margin:auto;position:relative;overflow:hidden;perspective:1600px}
+
+  /* Photo */
+  .photo-wrap{position:absolute;left:7.5%;top:19.5%;width:480px;height:330px;transform:rotate(-2deg)}
+  .frame{position:absolute;inset:-16px;border-radius:22px;background:#fff;box-shadow:inset 0 0 0 1px rgba(0,0,0,.07),0 14px 36px rgba(0,0,0,.12)}
+  .photo{position:absolute;inset:0;border-radius:18px;overflow:hidden;background:
+    linear-gradient(190deg,rgba(255,255,255,.35) 0,rgba(255,255,255,0) 40%),
+    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="480" height="330"><defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="%23bfe5ff"/><stop offset="65%" stop-color="%2386d5ff"/><stop offset="100%" stop-color="%2368c1ff"/></linearGradient></defs><rect width="480" height="330" fill="url(%23sky)"/><circle cx="400" cy="56" r="12" fill="%23ffd54a"/><g fill="%2387c79a"><polygon points="30,190 110,100 190,190"/><polygon points="120,188 200,92 280,188"/><polygon points="210,194 300,120 390,194"/></g><rect x="0" y="200" width="480" height="130" fill="%236ecbff"/></svg>');
+    background-size:cover}
+  .grain{position:absolute;inset:0;pointer-events:none;mix-blend-mode:multiply;opacity:.08;background-image:repeating-linear-gradient(0deg,rgba(0,0,0,.04) 0 1px,transparent 1px 2px),repeating-linear-gradient(90deg,rgba(0,0,0,.02) 0 1px,transparent 1px 3px)}
+
+  /* Téléphone (arrivée) */
+  .phone{position:absolute;width:300px;height:600px;border-radius:38px;background:#0b1428;box-shadow:0 34px 70px rgba(5,10,30,.35),inset 0 0 0 2px rgba(255,255,255,.06);display:grid;place-items:center;transform:rotate(12deg);
+    offset-path:path("M 820,120 C 700,180 540,220 470,260 C 420,290 380,320 360,350");offset-distance:0%;offset-rotate:0deg}
+  .screen{width:266px;height:566px;border-radius:32px;overflow:hidden;background:linear-gradient(180deg,#eaf2ff,#f7fbff);position:relative}
+
+  /* Grille factice */
+  .gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:18px}
+  .thumb{height:76px;border-radius:12px;background:#cfe7ff}
+  .thumb:nth-child(2){background:#c8f5d4}.thumb:nth-child(3){background:#ffd7e8}
+  .thumb:nth-child(4){background:#f8e0a6}.thumb:nth-child(5){background:#cfe7ff}
+  .thumb:nth-child(6){background:#c8f5d4}.thumb:nth-child(7){background:#ffd7e8}
+  .thumb:nth-child(8){background:#f8e0a6}.thumb:nth-child(9){background:#cfe7ff}
+
+  /* Séquence arrivée */
+  .demo.arrive .phone{animation:moveAlong var(--t-arrive) cubic-bezier(.32,0,.67,0) forwards}
+  @keyframes moveAlong{from{offset-distance:0%;transform:rotate(12deg)}to{offset-distance:100%;transform:rotate(-6deg)}}
+
+  /* Fallback sans offset-path */
+  .no-path .phone{left:62%;top:14%;transform:rotate(12deg)}
+  .no-path.arrive .phone{animation:approx .9s cubic-bezier(.32,0,.67,0) forwards}
+  @keyframes approx{from{transform:translate(-40vw,26vh) rotate(12deg)}to{transform:translate(-18vw,36vh) rotate(-6deg)}}
+</style>
+</head>
+<body>
+<div class="demo" id="demo" aria-label="Téléphone qui arrive sur la photo">
+  <div class="photo-wrap">
+    <div class="frame"></div>
+    <div class="photo"><div class="grain"></div></div>
+  </div>
+
+  <div class="phone" aria-hidden="true">
+    <div class="screen">
+      <div class="gallery" aria-hidden="true">
+        <div class="thumb"></div><div class="thumb"></div><div class="thumb"></div>
+        <div class="thumb"></div><div class="thumb"></div><div class="thumb"></div>
+        <div class="thumb"></div><div class="thumb"></div><div class="thumb"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const box=document.getElementById('demo');
+  if(!('offsetPath' in (document.body.style||{}))) box.classList.add('no-path');
+
+  function run(){
+    box.className=box.className.replace(/\b(arrive)\b/g,'').trim();
+    void box.offsetWidth;
+    box.classList.add('arrive');
+  }
+  box.addEventListener('mouseenter', run);
+  box.addEventListener('click', run);
+  run();
+})();
+</script>
+</body>
+</html>

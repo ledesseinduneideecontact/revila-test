@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Placeholder Images Generator</title>
+</head>
+<body>
+    <h1>Images à remplacer pour la page Partenariat Mariage</h1>
+    
+    <h2>Images nécessaires :</h2>
+    <ul>
+        <li><strong>hero-partenariat.jpg</strong> - Image hero en arrière-plan (1920x1080 recommandé)
+            <br>Suggestion : Photo d'un mariage élégant avec mariés ou détails de mariage
+        </li>
+        <li><strong>concept-photo.jpg</strong> - Image pour la section concept (800x600)
+            <br>Suggestion : Photo montrant quelqu'un utilisant une photo NFC Revila
+        </li>
+    </ul>
+    
+    <p>Ces images sont actuellement référencées dans le code mais n'existent pas encore.</p>
+    <p>Vous pouvez les remplacer en ajoutant vos propres images avec ces noms dans le dossier :</p>
+    <code>public/frontend-pictures/mariage/</code>
+    
+    <h3>Placeholders temporaires (cliquez pour télécharger) :</h3>
+    <canvas id="hero" width="1920" height="1080"></canvas>
+    <br><br>
+    <canvas id="concept" width="800" height="600"></canvas>
+    
+    <script>
+        // Créer placeholder hero
+        const heroCanvas = document.getElementById('hero');
+        const heroCtx = heroCanvas.getContext('2d');
+        
+        // Gradient background
+        const heroGradient = heroCtx.createLinearGradient(0, 0, 1920, 1080);
+        heroGradient.addColorStop(0, '#806947');
+        heroGradient.addColorStop(0.5, '#c4b4a2');
+        heroGradient.addColorStop(1, '#e0865f');
+        heroCtx.fillStyle = heroGradient;
+        heroCtx.fillRect(0, 0, 1920, 1080);
+        
+        // Text
+        heroCtx.fillStyle = 'white';
+        heroCtx.font = '48px Arial';
+        heroCtx.textAlign = 'center';
+        heroCtx.fillText('Image Hero Partenariat', 960, 540);
+        heroCtx.font = '24px Arial';
+        heroCtx.fillText('1920x1080 - À remplacer', 960, 580);
+        
+        // Créer placeholder concept
+        const conceptCanvas = document.getElementById('concept');
+        const conceptCtx = conceptCanvas.getContext('2d');
+        
+        // Background
+        conceptCtx.fillStyle = '#e2e2dd';
+        conceptCtx.fillRect(0, 0, 800, 600);
+        
+        // Center square
+        conceptCtx.fillStyle = '#806947';
+        conceptCtx.fillRect(200, 150, 400, 300);
+        
+        // Text
+        conceptCtx.fillStyle = 'white';
+        conceptCtx.font = '32px Arial';
+        conceptCtx.textAlign = 'center';
+        conceptCtx.fillText('Concept Photo', 400, 300);
+        conceptCtx.font = '18px Arial';
+        conceptCtx.fillText('800x600 - À remplacer', 400, 330);
+        
+        // Download functions
+        heroCanvas.style.cursor = 'pointer';
+        heroCanvas.onclick = function() {
+            heroCanvas.toBlob(function(blob) {
+                const link = document.createElement('a');
+                link.download = 'hero-partenariat.jpg';
+                link.href = URL.createObjectURL(blob);
+                link.click();
+            }, 'image/jpeg');
+        };
+        
+        conceptCanvas.style.cursor = 'pointer';
+        conceptCanvas.onclick = function() {
+            conceptCanvas.toBlob(function(blob) {
+                const link = document.createElement('a');
+                link.download = 'concept-photo.jpg';
+                link.href = URL.createObjectURL(blob);
+                link.click();
+            }, 'image/jpeg');
+        };
+    </script>
+</body>
+</html>

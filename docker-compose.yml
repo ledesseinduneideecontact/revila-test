@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  revive-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_SUPABASE_URL=https://zpczpnfrzvrivacifacu.supabase.co
+        - NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpwY3pwbmZyenZyaXZhY2lmYWN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEyNjk2NTIsImV4cCI6MjA2Njg0NTY1Mn0.EAkdDd4OJpgyrZYH5Pz7XiHcEMsHx5u0AM8FQuZdZlk
+        - SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpwY3pwbmZyenZyaXZhY2lmYWN1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MTI2OTY1MiwiZXhwIjoyMDY2ODQ1NjUyfQ.-Zo4x2o4I6DKyCZ2Tw2Ici3KWYK4WvXVz8FevQDewhw
+        - STRIPE_SECRET_KEY=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
+        - NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_51RmHywJUSulGi8fbGMtdHfbQQrAtj7AE0qroen2L2XJUAr0sr3im7tTpvLOUJejh4q6Fe0t413PLDQmZdJhS3gAt00QJ2AqWhe
+        - N8N_WEBHOOK_NEW_ORDER_PROD=https://primary-production-be41.up.railway.app/webhook/4b18ffa4-6a37-4694-b45f-7fec78b22092
+        - N8N_WEBHOOK_NEW_ORDER_TEST=https://primary-production-be41.up.railway.app/webhook-test/4b18ffa4-6a37-4694-b45f-7fec78b22092
+    container_name: revive-app-container
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+      - NEXT_PUBLIC_SUPABASE_URL=https://zpczpnfrzvrivacifacu.supabase.co
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpwY3pwbmZyenZyaXZhY2lmYWN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEyNjk2NTIsImV4cCI6MjA2Njg0NTY1Mn0.EAkdDd4OJpgyrZYH5Pz7XiHcEMsHx5u0AM8FQuZdZlk
+      - SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpwY3pwbmZyenZyaXZhY2lmYWN1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MTI2OTY1MiwiZXhwIjoyMDY2ODQ1NjUyfQ.-Zo4x2o4I6DKyCZ2Tw2Ici3KWYK4WvXVz8FevQDewhw
+      - STRIPE_SECRET_KEY=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
+      - NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_51RmHywJUSulGi8fbGMtdHfbQQrAtj7AE0qroen2L2XJUAr0sr3im7tTpvLOUJejh4q6Fe0t413PLDQmZdJhS3gAt00QJ2AqWhe
+      - N8N_WEBHOOK_NEW_ORDER_PROD=https://primary-production-be41.up.railway.app/webhook/4b18ffa4-6a37-4694-b45f-7fec78b22092
+      - N8N_WEBHOOK_NEW_ORDER_TEST=https://primary-production-be41.up.railway.app/webhook-test/4b18ffa4-6a37-4694-b45f-7fec78b22092
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - revive-network
+
+networks:
+  revive-network:
+    driver: bridge 
