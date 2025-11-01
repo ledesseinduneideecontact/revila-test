@@ -139,7 +139,7 @@ export default function StepFormat({ onSelect }: StepFormatProps) {
 
       {/* Grille de sélection - Formats disponibles */}
       <div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           {formats.map((format) => (
             <button
               key={`${format.size}`}
