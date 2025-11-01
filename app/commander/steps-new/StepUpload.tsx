@@ -207,23 +207,36 @@ export default function StepUpload({ format, onComplete, editingPhoto }: StepUpl
         </h3>
 
         {!videoPreview ? (
-          <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
-            <Button
-              onClick={() => videoInputRef.current?.click()}
-              variant="outline"
-              size="sm"
-            >
-              Ajouter une vidéo
-            </Button>
-            <input
-              ref={videoInputRef}
-              type="file"
-              accept="video/*"
-              className="hidden"
-              onChange={handleVideoChange}
-            />
-            <p className="text-xs text-gray-500 mt-2">
-              MP4, WebM, MOV (max 200 MB)
+          <div className="space-y-3">
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+              <Button
+                onClick={() => videoInputRef.current?.click()}
+                variant="outline"
+                size="sm"
+              >
+                Ajouter une vidéo
+              </Button>
+              <input
+                ref={videoInputRef}
+                type="file"
+                accept="video/*"
+                className="hidden"
+                onChange={handleVideoChange}
+              />
+              <p className="text-xs text-gray-500 mt-2">
+                MP4, WebM, MOV (max 200 MB)
+              </p>
+            </div>
+            <p className="text-xs text-gray-600 text-center">
+              💡 Vous pouvez faire un{' '}
+              <a
+                href="https://editeasy.up.railway.app/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-orange-600 hover:text-orange-700 underline font-medium"
+              >
+                montage automatique de vos photos et vidéos ici
+              </a>
             </p>
           </div>
         ) : (
