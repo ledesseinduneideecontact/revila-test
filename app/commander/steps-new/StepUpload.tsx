@@ -49,6 +49,8 @@ export default function StepUpload({ format, onComplete, editingPhoto }: StepUpl
   const [videoMockupLoading, setVideoMockupLoading] = useState(false)
   const [videoMockupError, setVideoMockupError] = useState<string | null>(null)
   const [showVideoModal, setShowVideoModal] = useState(false)
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
   const [showMessage, setShowMessage] = useState(!!editingPhoto?.message) // État pour le toggle du message
   const [showPreview, setShowPreview] = useState(false) // État pour afficher l'aperçu de l'étiquette
 
@@ -136,6 +138,9 @@ export default function StepUpload({ format, onComplete, editingPhoto }: StepUpl
         revokeMockupPreviewUrl(videoMockupPreview)
         setVideoMockupPreview(null)
       }
+
+      // Reset playing state
+      setIsVideoPlaying(false)
 
       // Set video file and basic preview
       setVideoFile(file)
@@ -307,26 +312,68 @@ export default function StepUpload({ format, onComplete, editingPhoto }: StepUpl
                 />
               </div>
             ) : (
-              /* Afficher le mockup généré */
+              /* Afficher le mockup avec vidéo jouable */
               <div className="space-y-2">
                 <div className="relative">
+                  {/* Image de fond du mockup */}
                   <img
                     src={videoMockupPreview}
-                    alt="Aperçu de votre vidéo dans un téléphone"
+                    alt="Mockup téléphone"
                     className="w-full h-auto rounded-lg"
+                    style={{ display: isVideoPlaying ? 'none' : 'block' }}
                   />
-                  {/* Bouton "Voir la vidéo complète" en overlay */}
-                  <button
-                    onClick={() => setShowVideoModal(true)}
-                    className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors rounded-lg group"
-                  >
-                    <div className="bg-white/90 rounded-full p-4 group-hover:scale-110 transition-transform">
-                      <Play className="w-8 h-8 text-purple-600" fill="currentColor" />
+
+                  {/* Vidéo jouable dans le mockup */}
+                  {isVideoPlaying && (
+                    <div className="relative w-full">
+                      {/* Fond du mockup */}
+                      <img
+                        src="/frontend-pictures/commander/phone-and-picture-portrait-mockup.png"
+                        alt="Mockup téléphone"
+                        className="w-full h-auto rounded-lg"
+                      />
+                      {/* Vidéo positionnée sur l'écran du téléphone */}
+                      <video
+                        ref={videoRef}
+                        src={videoPreview}
+                        className="absolute rounded-[45px]"
+                        style={{
+                          left: '28.5%',
+                          top: '15.8%',
+                          width: '47.7%',
+                          height: '54.2%',
+                          objectFit: 'cover'
+                        }}
+                        controls
+                        autoPlay
+                        onEnded={() => setIsVideoPlaying(false)}
+                      />
                     </div>
-                  </button>
+                  )}
+
+                  {/* Bouton Play centré sur l'écran du téléphone */}
+                  {!isVideoPlaying && (
+                    <button
+                      onClick={() => {
+                        setIsVideoPlaying(true)
+                        setTimeout(() => videoRef.current?.play(), 100)
+                      }}
+                      className="absolute flex items-center justify-center hover:scale-105 transition-transform"
+                      style={{
+                        left: '28.5%',
+                        top: '15.8%',
+                        width: '47.7%',
+                        height: '54.2%'
+                      }}
+                    >
+                      <div className="bg-white/90 rounded-full p-4 hover:scale-110 transition-transform">
+                        <Play className="w-8 h-8 text-purple-600" fill="currentColor" />
+                      </div>
+                    </button>
+                  )}
                 </div>
                 <p className="text-xs text-center text-gray-500">
-                  Cliquez sur l'aperçu pour voir la vidéo complète
+                  {isVideoPlaying ? 'Vidéo en lecture' : 'Cliquez pour lire la vidéo'}
                 </p>
               </div>
             )}
@@ -340,15 +387,32 @@ export default function StepUpload({ format, onComplete, editingPhoto }: StepUpl
               >
                 Changer la vidéo
               </Button>
-              {videoMockupPreview && (
+              {videoMockupPreview && !isVideoPlaying && (
                 <Button
-                  onClick={() => setShowVideoModal(true)}
+                  onClick={() => {
+                    setIsVideoPlaying(true)
+                    setTimeout(() => videoRef.current?.play(), 100)
+                  }}
                   variant="outline"
                   size="sm"
                   className="flex items-center gap-2"
                 >
                   <Play className="w-4 h-4" />
                   Lire
+                </Button>
+              )}
+              {isVideoPlaying && (
+                <Button
+                  onClick={() => {
+                    videoRef.current?.pause()
+                    setIsVideoPlaying(false)
+                  }}
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-2"
+                >
+                  <X className="w-4 h-4" />
+                  Arrêter
                 </Button>
               )}
             </div>

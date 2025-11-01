@@ -369,7 +369,7 @@ export async function generateVideoMockup(videoBlob: Blob): Promise<Blob> {
     y: 303,
     width: 477,
     height: 1037,
-    radius: 63
+    radius: 45 // Réduit de 63 à 45 pour éviter les bords blancs
   }
 
   try {
