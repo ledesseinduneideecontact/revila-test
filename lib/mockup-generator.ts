@@ -299,3 +299,164 @@ export function revokeMockupPreviewUrl(url: string): void {
     URL.revokeObjectURL(url)
   }
 }
+
+/**
+ * Convertit un Blob vidéo en HTMLVideoElement et extrait la première frame
+ */
+function blobToVideoFrame(blob: Blob): Promise<HTMLVideoElement> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob)
+    const video = document.createElement('video')
+    video.muted = true
+    video.playsInline = true
+
+    video.onloadeddata = () => {
+      // Chercher la première frame valide
+      video.currentTime = 0.1 // 100ms pour éviter les frames noires
+
+      video.onseeked = () => {
+        URL.revokeObjectURL(url) // Libérer la mémoire
+        resolve(video)
+      }
+    }
+
+    video.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error('Impossible de charger la vidéo'))
+    }
+
+    video.src = url
+    video.load()
+  })
+}
+
+/**
+ * Crée un masque avec coins arrondis
+ */
+function createRoundedRectMask(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number
+): void {
+  ctx.beginPath()
+  ctx.moveTo(x + radius, y)
+  ctx.lineTo(x + width - radius, y)
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius)
+  ctx.lineTo(x + width, y + height - radius)
+  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height)
+  ctx.lineTo(x + radius, y + height)
+  ctx.quadraticCurveTo(x, y + height, x, y + height - radius)
+  ctx.lineTo(x, y + radius)
+  ctx.quadraticCurveTo(x, y, x + radius, y)
+  ctx.closePath()
+}
+
+/**
+ * Génère un mockup avec une vidéo insérée dans un écran de téléphone
+ *
+ * @param videoBlob - La vidéo de l'utilisateur (File ou Blob)
+ * @returns Un Blob de l'image composite (première frame dans le téléphone)
+ */
+export async function generateVideoMockup(videoBlob: Blob): Promise<Blob> {
+  const MOCKUP_PATH = '/frontend-pictures/commander/phone-and-picture-portrait-mockup.png'
+
+  // Coordonnées exactes de la zone téléphone
+  const PHONE_ZONE = {
+    x: 285,
+    y: 303,
+    width: 477,
+    height: 1037,
+    radius: 63
+  }
+
+  try {
+    // 1. Charger le mockup de fond avec téléphone
+    const mockupImg = await loadImage(MOCKUP_PATH)
+
+    // 2. Extraire la première frame de la vidéo
+    const video = await blobToVideoFrame(videoBlob)
+
+    // 3. Créer le canvas final aux dimensions du mockup
+    const finalCanvas = document.createElement('canvas')
+    finalCanvas.width = mockupImg.width
+    finalCanvas.height = mockupImg.height
+    const ctx = finalCanvas.getContext('2d', { willReadFrequently: true })
+
+    if (!ctx) {
+      throw new Error('Impossible de créer le contexte canvas')
+    }
+
+    // 4. Dessiner le fond (image avec téléphone et cadre)
+    ctx.drawImage(mockupImg, 0, 0)
+
+    // 5. Créer un canvas temporaire pour la vidéo
+    const videoCanvas = document.createElement('canvas')
+    videoCanvas.width = video.videoWidth
+    videoCanvas.height = video.videoHeight
+    const videoCtx = videoCanvas.getContext('2d', { willReadFrequently: true })
+
+    if (!videoCtx) {
+      throw new Error('Impossible de créer le contexte canvas pour la vidéo')
+    }
+
+    // Dessiner la frame vidéo
+    videoCtx.drawImage(video, 0, 0)
+
+    // 6. Redimensionner la vidéo en mode "cover" pour remplir l'écran du téléphone
+    const resizedVideo = resizeAndCropCover(
+      videoCanvas,
+      PHONE_ZONE.width,
+      PHONE_ZONE.height
+    )
+
+    // 7. Appliquer le masque arrondi et dessiner la vidéo dans le téléphone
+    ctx.save()
+
+    // Créer le chemin du masque arrondi
+    createRoundedRectMask(
+      ctx,
+      PHONE_ZONE.x,
+      PHONE_ZONE.y,
+      PHONE_ZONE.width,
+      PHONE_ZONE.height,
+      PHONE_ZONE.radius
+    )
+
+    // Appliquer le clipping
+    ctx.clip()
+
+    // Dessiner la vidéo redimensionnée
+    ctx.drawImage(
+      resizedVideo,
+      PHONE_ZONE.x,
+      PHONE_ZONE.y,
+      PHONE_ZONE.width,
+      PHONE_ZONE.height
+    )
+
+    ctx.restore()
+
+    // 8. Convertir le canvas en Blob
+    return new Promise((resolve, reject) => {
+      finalCanvas.toBlob(
+        (blob) => {
+          if (blob) {
+            console.log('✅ Mockup vidéo généré avec succès')
+            resolve(blob)
+          } else {
+            reject(new Error('Impossible de générer le blob du mockup vidéo'))
+          }
+        },
+        'image/png',
+        1.0 // Qualité maximale
+      )
+    })
+
+  } catch (error) {
+    console.error('Erreur lors de la génération du mockup vidéo:', error)
+    throw error // On ne peut pas fallback sur un blob vidéo comme image
+  }
+}

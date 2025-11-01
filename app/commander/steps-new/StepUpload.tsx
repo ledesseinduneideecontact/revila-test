@@ -1,10 +1,15 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Upload, Image as ImageIcon, Video, MessageSquare, Sparkles, Crop, RotateCw, ChevronDown, ChevronUp, Eye, X } from 'lucide-react'
+import { Upload, Image as ImageIcon, Video, MessageSquare, Sparkles, Crop, RotateCw, ChevronDown, ChevronUp, Eye, X, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import PhotoCropper from '@/components/PhotoCropper'
 import type { PhotoItem } from '../CommanderWizardNew'
+import {
+  generateVideoMockup,
+  createMockupPreviewUrl,
+  revokeMockupPreviewUrl
+} from '@/lib/mockup-generator'
 
 interface StepUploadProps {
   format: 'carre' | '10x15' | '20x30' | '30x45'
@@ -38,6 +43,12 @@ export default function StepUpload({ format, onComplete, editingPhoto }: StepUpl
   const [originalImageSrc, setOriginalImageSrc] = useState<string>('')
   const [orientation, setOrientation] = useState<'portrait' | 'paysage'>('portrait')
   const [cropConfig, setCropConfig] = useState<CropConfig | null>((editingPhoto as any)?.cropConfig || null) // Sauvegarde la config de crop
+
+  // États pour le mockup vidéo
+  const [videoMockupPreview, setVideoMockupPreview] = useState<string | null>(null)
+  const [videoMockupLoading, setVideoMockupLoading] = useState(false)
+  const [videoMockupError, setVideoMockupError] = useState<string | null>(null)
+  const [showVideoModal, setShowVideoModal] = useState(false)
   const [showMessage, setShowMessage] = useState(!!editingPhoto?.message) // État pour le toggle du message
   const [showPreview, setShowPreview] = useState(false) // État pour afficher l'aperçu de l'étiquette
 
@@ -53,6 +64,18 @@ export default function StepUpload({ format, onComplete, editingPhoto }: StepUpl
       }
     }
   }, [editingPhoto, originalFile])
+
+  // Cleanup video mockup preview URLs on unmount
+  useEffect(() => {
+    return () => {
+      if (videoMockupPreview) {
+        revokeMockupPreviewUrl(videoMockupPreview)
+      }
+      if (videoPreview) {
+        URL.revokeObjectURL(videoPreview)
+      }
+    }
+  }, [])
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault()
@@ -102,15 +125,37 @@ export default function StepUpload({ format, onComplete, editingPhoto }: StepUpl
     e.target.value = ''
   }
 
-  const handleVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleVideoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file && file.type.startsWith('video/')) {
-      // Clean up old preview
+      // Clean up old previews
       if (videoPreview) {
         URL.revokeObjectURL(videoPreview)
       }
+      if (videoMockupPreview) {
+        revokeMockupPreviewUrl(videoMockupPreview)
+        setVideoMockupPreview(null)
+      }
+
+      // Set video file and basic preview
       setVideoFile(file)
       setVideoPreview(URL.createObjectURL(file))
+
+      // Generate video mockup
+      setVideoMockupLoading(true)
+      setVideoMockupError(null)
+
+      try {
+        const mockupBlob = await generateVideoMockup(file)
+        const mockupUrl = createMockupPreviewUrl(mockupBlob)
+        setVideoMockupPreview(mockupUrl)
+        console.log('✅ Mockup vidéo généré et affiché')
+      } catch (error) {
+        console.error('❌ Erreur génération mockup vidéo:', error)
+        setVideoMockupError('Impossible de générer l\'aperçu. La vidéo sera affichée normalement.')
+      } finally {
+        setVideoMockupLoading(false)
+      }
     }
     // Reset input value to allow selecting the same file again
     e.target.value = ''
@@ -241,19 +286,72 @@ export default function StepUpload({ format, onComplete, editingPhoto }: StepUpl
           </div>
         ) : (
           <div className="space-y-4">
-            <video
-              src={videoPreview}
-              controls
-              className="w-full h-40 object-contain rounded-lg bg-gray-100"
-            />
-            <Button
-              onClick={() => videoInputRef.current?.click()}
-              variant="outline"
-              size="sm"
-              className="w-full"
-            >
-              Changer la vidéo
-            </Button>
+            {/* Affichage du mockup vidéo */}
+            {videoMockupLoading ? (
+              <div className="w-full h-64 flex flex-col items-center justify-center bg-gray-100 rounded-lg">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mb-3"></div>
+                <p className="text-sm text-gray-600">Génération de l'aperçu...</p>
+              </div>
+            ) : videoMockupError || !videoMockupPreview ? (
+              /* Fallback: afficher la vidéo normale en cas d'erreur */
+              <div className="space-y-2">
+                {videoMockupError && (
+                  <p className="text-xs text-orange-600 bg-orange-50 p-2 rounded">
+                    {videoMockupError}
+                  </p>
+                )}
+                <video
+                  src={videoPreview}
+                  controls
+                  className="w-full h-40 object-contain rounded-lg bg-gray-100"
+                />
+              </div>
+            ) : (
+              /* Afficher le mockup généré */
+              <div className="space-y-2">
+                <div className="relative">
+                  <img
+                    src={videoMockupPreview}
+                    alt="Aperçu de votre vidéo dans un téléphone"
+                    className="w-full h-auto rounded-lg"
+                  />
+                  {/* Bouton "Voir la vidéo complète" en overlay */}
+                  <button
+                    onClick={() => setShowVideoModal(true)}
+                    className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors rounded-lg group"
+                  >
+                    <div className="bg-white/90 rounded-full p-4 group-hover:scale-110 transition-transform">
+                      <Play className="w-8 h-8 text-purple-600" fill="currentColor" />
+                    </div>
+                  </button>
+                </div>
+                <p className="text-xs text-center text-gray-500">
+                  Cliquez sur l'aperçu pour voir la vidéo complète
+                </p>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <Button
+                onClick={() => videoInputRef.current?.click()}
+                variant="outline"
+                size="sm"
+                className="flex-1"
+              >
+                Changer la vidéo
+              </Button>
+              {videoMockupPreview && (
+                <Button
+                  onClick={() => setShowVideoModal(true)}
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-2"
+                >
+                  <Play className="w-4 h-4" />
+                  Lire
+                </Button>
+              )}
+            </div>
             <input
               ref={videoInputRef}
               type="file"
@@ -503,6 +601,38 @@ export default function StepUpload({ format, onComplete, editingPhoto }: StepUpl
               <p className="text-sm text-gray-600 text-center mt-4">
                 Voici un exemple d'étiquette qui sera ajoutée à votre photo avec votre message personnalisé
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de lecture vidéo complète */}
+      {showVideoModal && videoPreview && (
+        <div
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowVideoModal(false)}
+        >
+          <div
+            className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Bouton fermer */}
+            <button
+              onClick={() => setShowVideoModal(false)}
+              className="absolute top-4 right-4 z-10 bg-white/90 hover:bg-white rounded-full p-2 transition-colors"
+            >
+              <X className="w-6 h-6 text-gray-700" />
+            </button>
+
+            {/* Lecteur vidéo */}
+            <div className="p-6">
+              <h3 className="text-xl font-semibold mb-4">Votre vidéo</h3>
+              <video
+                src={videoPreview}
+                controls
+                autoPlay
+                className="w-full h-auto rounded-lg bg-black"
+              />
             </div>
           </div>
         </div>
