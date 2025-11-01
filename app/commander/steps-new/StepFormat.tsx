@@ -1,33 +1,23 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Image from 'next/image'
-import { Check, Frame, Square } from 'lucide-react'
+import Link from 'next/link'
+import { Check, Frame, Square, Search } from 'lucide-react'
 
 interface StepFormatProps {
-  onSelect: (format: 'carre' | '10x15' | '20x30' | '30x45') => void
+  onSelect: (format: '10x15' | '20x30' | '30x45') => void
 }
 
 import { BASE_PRICES_TTC } from '@/lib/pricing'
 
 const formats = [
-  { 
-    size: 'carre', 
-    displayName: 'Style rétro',
-    description: '10×10 cm',
-    width: 10, 
-    height: 10, 
-    scale: 1,
-    isPolaroid: true,
-    hasFrame: false,
-    icon: Square
-  },
-  { 
-    size: '10x15', 
+  {
+    size: '10x15',
     displayName: 'Classique',
     description: '10×15 cm',
-    width: 15, 
-    height: 10, 
+    width: 15,
+    height: 10,
     scale: 1,
     isPolaroid: false,
     hasFrame: true,
@@ -58,31 +48,87 @@ const formats = [
 ]
 
 const prices = {
-  'carre': { 
-    withoutFrame: BASE_PRICES_TTC.photos['carre'], 
-    withFrame: BASE_PRICES_TTC.photos['carre'] // Pas de cadre pour le format carré
+  '10x15': {
+    withoutFrame: BASE_PRICES_TTC.photos['10x15'],
+    withFrame: BASE_PRICES_TTC.photos['10x15'] + BASE_PRICES_TTC.frames['10x15']
   },
-  '10x15': { 
-    withoutFrame: BASE_PRICES_TTC.photos['10x15'], 
-    withFrame: BASE_PRICES_TTC.photos['10x15'] + BASE_PRICES_TTC.frames['10x15'] 
+  '20x30': {
+    withoutFrame: BASE_PRICES_TTC.photos['20x30'],
+    withFrame: BASE_PRICES_TTC.photos['20x30'] + BASE_PRICES_TTC.frames['20x30']
   },
-  '20x30': { 
-    withoutFrame: BASE_PRICES_TTC.photos['20x30'], 
-    withFrame: BASE_PRICES_TTC.photos['20x30'] + BASE_PRICES_TTC.frames['20x30'] 
-  },
-  '30x45': { 
-    withoutFrame: BASE_PRICES_TTC.photos['30x45'], 
-    withFrame: BASE_PRICES_TTC.photos['30x45'] + BASE_PRICES_TTC.frames['30x45'] 
+  '30x45': {
+    withoutFrame: BASE_PRICES_TTC.photos['30x45'],
+    withFrame: BASE_PRICES_TTC.photos['30x45'] + BASE_PRICES_TTC.frames['30x45']
   }
 }
+
+// Images pour le carousel mariage
+const mariageCarouselImages = [
+  "/frontend-pictures/modele-mariage/mariage/modele-1.png",
+  "/frontend-pictures/modele-mariage/mariage/modele-2.png",
+  "/frontend-pictures/modele-mariage/mariage/modele-3.png",
+  "/frontend-pictures/modele-mariage/mariage/mariage-modele-5/1.png",
+  "/frontend-pictures/modele-mariage/mariage/mariage-modele-6.png",
+  "/frontend-pictures/modele-mariage/mariage/mariage-modele-7/1.png"
+]
+
+// Images pour le carousel naissance
+const naissanceCarouselImages = [
+  "/frontend-pictures/modele-naissance/faire-part-1/gabriel-recto.png",
+  "/frontend-pictures/modele-naissance/faire-part-2/camilla-recto.png",
+  "/frontend-pictures/modele-naissance/faire-part-3/agathe-recto.png",
+  "/frontend-pictures/modele-naissance/agathe-recto.png"
+]
 
 export default function StepFormat({ onSelect }: StepFormatProps) {
   const [selected, setSelected] = useState<string | null>(null)
 
-  const handleSelect = (format: 'carre' | '10x15' | '20x30' | '30x45') => {
+  // États pour les carousels
+  const [currentMariageImageIndex, setCurrentMariageImageIndex] = useState(0)
+  const [currentNaissanceImageIndex, setCurrentNaissanceImageIndex] = useState(0)
+  const [mariageDelay] = useState(() => Math.random() * 3000)
+  const [naissanceDelay] = useState(() => Math.random() * 3000)
+
+  const handleSelect = (format: '10x15' | '20x30' | '30x45') => {
     setSelected(format)
     setTimeout(() => onSelect(format), 300) // Petit délai pour voir la sélection
   }
+
+  // Rotation automatique du carousel mariage (toutes les 6 secondes)
+  useEffect(() => {
+    let interval: NodeJS.Timeout
+    const timeout = setTimeout(() => {
+      interval = setInterval(() => {
+        setCurrentMariageImageIndex((prev) => {
+          // Infinite scroll: revenir à 0 après la dernière image
+          return prev === mariageCarouselImages.length ? 0 : prev + 1
+        })
+      }, 6000)
+    }, mariageDelay)
+
+    return () => {
+      clearTimeout(timeout)
+      if (interval) clearInterval(interval)
+    }
+  }, [mariageDelay])
+
+  // Rotation automatique du carousel naissance (toutes les 6 secondes)
+  useEffect(() => {
+    let interval: NodeJS.Timeout
+    const timeout = setTimeout(() => {
+      interval = setInterval(() => {
+        setCurrentNaissanceImageIndex((prev) => {
+          // Infinite scroll: revenir à 0 après la dernière image
+          return prev === naissanceCarouselImages.length ? 0 : prev + 1
+        })
+      }, 6000)
+    }, naissanceDelay)
+
+    return () => {
+      clearTimeout(timeout)
+      if (interval) clearInterval(interval)
+    }
+  }, [naissanceDelay])
 
   return (
     <div className="space-y-8">
@@ -97,7 +143,7 @@ export default function StepFormat({ onSelect }: StepFormatProps) {
           {formats.map((format) => (
             <button
               key={`${format.size}`}
-              onClick={() => handleSelect(format.size as 'carre' | '10x15' | '20x30' | '30x45')}
+              onClick={() => handleSelect(format.size as '10x15' | '20x30' | '30x45')}
               className={`group relative bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-200 hover:-translate-y-1 ${
                 selected === format.size ? 'ring-2 ring-orange-500 shadow-orange-200' : ''
               }`}
@@ -178,6 +224,100 @@ export default function StepFormat({ onSelect }: StepFormatProps) {
               </div>
             </button>
           ))}
+        </div>
+      </div>
+
+      {/* Section Modèles de faire-part */}
+      <div className="mt-12 space-y-6">
+        <div className="text-center">
+          <h3 className="text-xl font-bold mb-2">Besoin d'inspiration ?</h3>
+          <p className="text-gray-600">Découvrez nos modèles de faire-part</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Carousel Mariage */}
+          <Link
+            href="/modele-mariage"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group"
+          >
+            <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-200 overflow-hidden">
+              <div className="h-52 px-4 py-6 relative overflow-hidden">
+                <div
+                  className="flex ease-in-out"
+                  style={{
+                    transform: `translateX(-${currentMariageImageIndex * 100}%)`,
+                    transition: currentMariageImageIndex === 0 ? 'none' : 'transform 1000ms ease-in-out'
+                  }}
+                >
+                  {[...mariageCarouselImages, mariageCarouselImages[0]].map((src, idx) => (
+                    <div key={idx} className="flex-shrink-0 w-full h-full flex items-center justify-center">
+                      <Image
+                        src={src}
+                        alt={`Modèle mariage ${idx + 1}`}
+                        width={300}
+                        height={200}
+                        className="object-contain max-h-40"
+                      />
+                    </div>
+                  ))}
+                </div>
+                {/* Hover overlay */}
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-200 flex items-center justify-center">
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-white/90 rounded-full p-3">
+                    <Search className="w-6 h-6 text-orange-600" />
+                  </div>
+                </div>
+              </div>
+              <div className="p-4 bg-gradient-to-b from-white to-pink-50">
+                <h4 className="font-semibold text-gray-900 text-center">Modèles de faire-part de mariage</h4>
+                <p className="text-sm text-gray-600 text-center mt-1">Cliquez pour découvrir nos modèles</p>
+              </div>
+            </div>
+          </Link>
+
+          {/* Carousel Naissance */}
+          <Link
+            href="/modele-naissance"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group"
+          >
+            <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-200 overflow-hidden">
+              <div className="h-52 px-4 py-6 relative overflow-hidden">
+                <div
+                  className="flex ease-in-out"
+                  style={{
+                    transform: `translateX(-${currentNaissanceImageIndex * 100}%)`,
+                    transition: currentNaissanceImageIndex === 0 ? 'none' : 'transform 1000ms ease-in-out'
+                  }}
+                >
+                  {[...naissanceCarouselImages, naissanceCarouselImages[0]].map((src, idx) => (
+                    <div key={idx} className="flex-shrink-0 w-full h-full flex items-center justify-center">
+                      <Image
+                        src={src}
+                        alt={`Modèle naissance ${idx + 1}`}
+                        width={300}
+                        height={200}
+                        className="object-contain max-h-40"
+                      />
+                    </div>
+                  ))}
+                </div>
+                {/* Hover overlay */}
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-200 flex items-center justify-center">
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-white/90 rounded-full p-3">
+                    <Search className="w-6 h-6 text-orange-600" />
+                  </div>
+                </div>
+              </div>
+              <div className="p-4 bg-gradient-to-b from-white to-blue-50">
+                <h4 className="font-semibold text-gray-900 text-center">Modèles de faire-part de naissance</h4>
+                <p className="text-sm text-gray-600 text-center mt-1">Cliquez pour découvrir nos modèles</p>
+              </div>
+            </div>
+          </Link>
         </div>
       </div>
     </div>

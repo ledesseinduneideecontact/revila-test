@@ -31,16 +31,12 @@ export default function StepOptions({ cart, onUpdateFrames, onNext }: StepOption
     '30x45': 0
   })
 
-  // Calculer le nombre de photos par format (sans compter le carré)
+  // Calculer le nombre de photos par format
   const photosByFormat = cart.reduce((acc, format) => {
-    if (format.format !== 'carre') {
-      const totalPhotos = format.photos.reduce((sum, photo) => sum + photo.quantity, 0)
-      acc[format.format] = (acc[format.format] || 0) + totalPhotos
-    }
+    const totalPhotos = format.photos.reduce((sum, photo) => sum + photo.quantity, 0)
+    acc[format.format] = (acc[format.format] || 0) + totalPhotos
     return acc
   }, {} as Record<string, number>)
-
-  const hasSquareFormat = cart.some(f => f.format === 'carre')
 
   const updateQuantity = (format: keyof FrameSelection, delta: number) => {
     setFrameQuantities(prev => ({
@@ -66,18 +62,6 @@ export default function StepOptions({ cart, onUpdateFrames, onNext }: StepOption
       {/* Sélection des cadres par format */}
       <div className="space-y-6">
         <h3 className="text-xl font-semibold text-center">Sublimez vos photos avec un cadre</h3>
-        
-        {/* Format 10x10 - Non disponible */}
-        {hasSquareFormat && (
-          <div className="bg-gray-50 rounded-xl p-6 text-center">
-            <p className="text-gray-600">
-              Format 10×10 cm : {cart.filter(f => f.format === 'carre').reduce((sum, f) => 
-                sum + f.photos.reduce((s, p) => s + p.quantity, 0), 0
-              )} photo(s)
-            </p>
-            <p className="text-sm text-gray-500 italic mt-2">Option cadre non disponible pour ce format</p>
-          </div>
-        )}
 
         {/* Grille des formats avec cadres */}
         <div className="w-[90vw] md:w-full mx-auto grid md:grid-cols-3 gap-6">

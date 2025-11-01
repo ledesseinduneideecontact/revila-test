@@ -3,7 +3,6 @@
 // Prix de base HT (avant réduction)
 export const BASE_PRICES_HT = {
   photos: {
-    carre: 6.25,    // 7.50€ TTC / 1.20 = 6.25€ HT
     '10x15': 7.92,  // 9.50€ TTC / 1.20 = 7.92€ HT
     '20x30': 15.42, // 18.50€ TTC / 1.20 = 15.42€ HT
     '30x45': 20.42  // 24.50€ TTC / 1.20 = 20.42€ HT
@@ -19,7 +18,6 @@ export const BASE_PRICES_HT = {
 // Prix TTC (avec TVA 20%)
 export const BASE_PRICES_TTC = {
   photos: {
-    carre: 7.50,
     '10x15': 9.50,
     '20x30': 18.50,
     '30x45': 24.50
@@ -35,7 +33,6 @@ export const BASE_PRICES_TTC = {
 // Coûts de production
 export const PRODUCTION_COSTS = {
   photos: {
-    carre: 0.40,
     '10x15': 0.23,
     '20x30': 7.10,
     '30x45': 9.10
@@ -94,7 +91,6 @@ export const SHIPPING_COSTS = {
 // Poids des éléments (en grammes)
 export const ITEM_WEIGHTS = {
   photos: {
-    carre: 5,
     '10x15': 5,
     '20x30': 25,
     '30x45': 40
@@ -287,8 +283,8 @@ export function getPhotoPrice(format: PhotoFormat, withFrame: boolean = false): 
   total: number
 } {
   const photoPrice = BASE_PRICES_TTC.photos[format]
-  const framePrice = withFrame && format !== 'carre' ? BASE_PRICES_TTC.frames[format as keyof typeof BASE_PRICES_TTC.frames] : undefined
-  
+  const framePrice = withFrame ? BASE_PRICES_TTC.frames[format as keyof typeof BASE_PRICES_TTC.frames] : undefined
+
   return {
     photoPrice,
     framePrice,
@@ -303,10 +299,10 @@ export function calculateTotalWeight(items: { format: PhotoFormat, withFrame: bo
   return items.reduce((total, item) => {
     const photoWeight = ITEM_WEIGHTS.photos[item.format] * item.quantity
     const nfcWeight = (ITEM_WEIGHTS.nfc.chip + ITEM_WEIGHTS.nfc.label) * item.quantity
-    const frameWeight = item.withFrame && item.format !== 'carre' 
-      ? ITEM_WEIGHTS.frames[item.format as keyof typeof ITEM_WEIGHTS.frames] * item.quantity 
+    const frameWeight = item.withFrame
+      ? ITEM_WEIGHTS.frames[item.format as keyof typeof ITEM_WEIGHTS.frames] * item.quantity
       : 0
-    
+
     return total + photoWeight + nfcWeight + frameWeight
   }, 0)
 }
