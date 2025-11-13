@@ -709,9 +709,7 @@ export default function StepUpload({ format, onComplete, editingPhoto }: StepUpl
         console.log('🎨 Génération du mockup combiné...')
         const mockupBlob = await generatePhotoAndVideoMockup(
           videoFile,
-          croppedFileData,
-          videoOrientation,
-          photoOrientation
+          croppedFileData
         )
 
         // Nettoyer l'ancien mockup
