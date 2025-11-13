@@ -496,9 +496,7 @@ export default function StepUpload({ format, onComplete, editingPhoto }: StepUpl
             console.log('🎨 Régénération du mockup combiné avec la nouvelle vidéo...')
             const mockupBlob = await generatePhotoAndVideoMockup(
               file,
-              croppedFile,
-              orientation,
-              photoOrientation
+              croppedFile
             )
 
             // Nettoyer l'ancien mockup combiné
