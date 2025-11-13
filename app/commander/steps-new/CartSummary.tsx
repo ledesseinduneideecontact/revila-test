@@ -2,13 +2,17 @@
 
 import React, { useState, useEffect } from 'react'
 
-import { Trash2, Plus, Minus, ShoppingBag, MessageSquare, Save, Edit, Tag, SquarePen, Frame, Check, X, Truck, Calendar, Lock } from 'lucide-react'
+import { Trash2, Plus, Minus, ShoppingBag, Edit, Tag, Check, X, Truck, Gift, Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import ConfirmationModal from './ConfirmationModal'
 import SaveCartModal from './SaveCartModal'
 import type { CartFormat } from '../CommanderWizardNew'
 import type { FrameSelection } from './StepOptions'
-import { calculateOrderPricing, getPhotoPrice, CartItemPricing, PhotoFormat, calculateShippingCost } from '@/lib/pricing'
+import { calculateOrderPricing, getPhotoPrice, CartItemPricing, PhotoFormat, calculateShippingCost, calculateShippingByAddress, type PhotoInstance as PricingPhotoInstance, type ShippingByAddressDetail } from '@/lib/pricing'
+import { generateFrameMockup, revokeFrameMockupURL } from '@/lib/frameMockupGenerator'
+import GiftAddressManager, { GiftAddress } from './GiftAddressManager'
+import PhotoAddressDistributor from './PhotoAddressDistributor'
+import type { AddressDistribution } from '@/types'
 
 interface CartSummaryProps {
   cart: CartFormat[]
@@ -19,10 +23,17 @@ interface CartSummaryProps {
   onEditFormat?: (formatIndex: number) => void
   onEditFrames?: () => void
   onUpdateFrameQuantity?: (format: keyof FrameSelection, quantity: number) => void
+  onUpdatePhotoQuantity?: (formatIndex: number, photoId: string, delta: number, isFramed: boolean) => void
   promoCode?: string
   promoDiscount?: number
   onPromoCodeChange?: (code: string, discount: number) => void
   isWeddingPlanSource?: boolean
+  giftAddresses: GiftAddress[]
+  photoAddressDistributions: Record<string, AddressDistribution[]>
+  onAddGiftAddress: (address: Omit<GiftAddress, 'id'>) => void
+  onEditGiftAddress: (id: string, address: Omit<GiftAddress, 'id'>) => void
+  onDeleteGiftAddress: (id: string) => void
+  onPhotoAddressDistribution: (photoId: string, distributions: AddressDistribution[]) => void
 }
 
 const SHIPPING_PRICES = {
@@ -31,7 +42,58 @@ const SHIPPING_PRICES = {
   perGift: 2.00
 }
 
-export default function CartSummary({ cart, frameSelection, onUpdateCart, onProceedToInfo, onContinueShopping, onEditFormat, onEditFrames, onUpdateFrameQuantity, promoCode = '', promoDiscount = 0, onPromoCodeChange, isWeddingPlanSource = false }: CartSummaryProps) {
+// Composant pour le stepper de quantité
+const QuantityStepper = ({
+  quantity,
+  onIncrement,
+  onDecrement
+}: {
+  quantity: number
+  onIncrement: () => void
+  onDecrement: () => void
+}) => (
+  <div className="flex items-center justify-center gap-2 mt-2">
+    <button
+      onClick={onDecrement}
+      className="w-8 h-8 rounded-full border-2 border-orange-500 text-orange-500 hover:bg-orange-500 hover:text-white flex items-center justify-center transition-colors text-lg font-bold"
+      aria-label={quantity === 1 ? "Supprimer" : "Diminuer la quantité"}
+    >
+      {quantity === 1 ? <Trash2 className="w-4 h-4" /> : '−'}
+    </button>
+    <span className="min-w-[2.5rem] text-center font-semibold text-gray-900">
+      {quantity}
+    </span>
+    <button
+      onClick={onIncrement}
+      className="w-8 h-8 rounded-full border-2 border-orange-500 text-orange-500 hover:bg-orange-500 hover:text-white flex items-center justify-center transition-colors text-lg font-bold"
+      aria-label="Augmenter la quantité"
+    >
+      +
+    </button>
+  </div>
+)
+
+export default function CartSummary({
+  cart,
+  frameSelection,
+  onUpdateCart,
+  onProceedToInfo,
+  onContinueShopping,
+  onEditFormat,
+  onEditFrames,
+  onUpdateFrameQuantity,
+  onUpdatePhotoQuantity,
+  promoCode = '',
+  promoDiscount = 0,
+  onPromoCodeChange,
+  isWeddingPlanSource = false,
+  giftAddresses,
+  photoAddressDistributions,
+  onAddGiftAddress,
+  onEditGiftAddress,
+  onDeleteGiftAddress,
+  onPhotoAddressDistribution
+}: CartSummaryProps) {
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [formatToDelete, setFormatToDelete] = useState<number | null>(null)
   const [showSaveModal, setShowSaveModal] = useState(false)
@@ -40,12 +102,58 @@ export default function CartSummary({ cart, frameSelection, onUpdateCart, onProc
   const [appliedPromoCode, setAppliedPromoCode] = useState(promoCode) // Code actuellement appliqué
   const [isValidatingPromo, setIsValidatingPromo] = useState(false) // État de chargement pour la validation
   const [isPromoLocked, setIsPromoLocked] = useState(false) // État de verrouillage pour WeddingPlan
-  
+
+  // États pour les mockups de cadres
+  const [photoMockups, setPhotoMockups] = useState<Record<string, string>>({})
+  const [isGeneratingMockups, setIsGeneratingMockups] = useState(true)
+
+  // Mode de livraison multiple basé sur la présence d'adresses cadeaux
+  const multipleAddressMode = giftAddresses.length > 0
+
   // Helper pour afficher le format correctement
   const formatDisplay = (format: string) => {
     if (format === 'carre') return '10×10 cm'
     return format.replace('x', '×') + ' cm'
   }
+
+  // Générer les mockups pour les photos avec cadres
+  useEffect(() => {
+    const generateAllMockups = async () => {
+      setIsGeneratingMockups(true)
+      const mockups: Record<string, string> = {}
+
+      for (const cartFormat of cart) {
+        for (const photo of cartFormat.photos) {
+          // Générer mockup seulement si frameQuantity > 0
+          if (photo.frameQuantity && photo.frameQuantity > 0) {
+            try {
+              const orientation = (photo as any).cropConfig?.orientation || 'portrait'
+              const mockupUrl = await generateFrameMockup(
+                photo.photoPreview || '',
+                cartFormat.format as '10x15' | '20x30' | '30x45',
+                orientation
+              )
+              mockups[photo.id] = mockupUrl
+            } catch (error) {
+              console.error(`Erreur génération mockup pour photo ${photo.id}:`, error)
+            }
+          }
+        }
+      }
+
+      setPhotoMockups(mockups)
+      setIsGeneratingMockups(false)
+    }
+
+    generateAllMockups()
+
+    // Cleanup : révoquer les Blob URLs au démontage
+    return () => {
+      Object.values(photoMockups).forEach(url => {
+        revokeFrameMockupURL(url)
+      })
+    }
+  }, [cart])
 
   const removeFormat = (index: number) => {
     setFormatToDelete(index)
@@ -76,7 +184,7 @@ export default function CartSummary({ cart, frameSelection, onUpdateCart, onProc
   // Préparer les données pour le calcul des prix
   const prepareCartItems = (): CartItemPricing[] => {
     const items: CartItemPricing[] = []
-    
+
     cart.forEach(format => {
       format.photos.forEach(photo => {
         // Utiliser le withFrame individuel de chaque photo
@@ -92,8 +200,44 @@ export default function CartSummary({ cart, frameSelection, onUpdateCart, onProc
         })
       })
     })
-    
+
     return items
+  }
+
+  // Préparer les instances de photos pour le calcul de livraison
+  const preparePhotoInstances = (): PricingPhotoInstance[] => {
+    const instances: PricingPhotoInstance[] = []
+
+    cart.forEach(format => {
+      format.photos.forEach(photo => {
+        const frameQuantity = photo.frameQuantity || 0
+        const noFrameQuantity = photo.quantity - frameQuantity
+
+        // Créer une instance pour les versions avec cadres (si > 0)
+        if (frameQuantity > 0) {
+          instances.push({
+            instanceKey: `${photo.id}-framed`,
+            id: photo.id,
+            format: format.format as PhotoFormat,
+            withFrame: true,
+            displayQuantity: frameQuantity
+          })
+        }
+
+        // Créer une instance pour les versions sans cadres (si > 0)
+        if (noFrameQuantity > 0) {
+          instances.push({
+            instanceKey: `${photo.id}-noframe`,
+            id: photo.id,
+            format: format.format as PhotoFormat,
+            withFrame: false,
+            displayQuantity: noFrameQuantity
+          })
+        }
+      })
+    })
+
+    return instances
   }
 
   // Calculer le total des cadres en premier
@@ -113,22 +257,19 @@ export default function CartSummary({ cart, frameSelection, onUpdateCart, onProc
     })
   }
 
-  // Calculer la livraison en tenant compte des cadres de StepOptions
-  const cartFrameCount = prepareCartItems().filter(item => item.withFrame).reduce((sum, item) => sum + item.quantity, 0)
-  const optionsFrameCount = totalFrames // Maintenant totalFrames est défini
-  const totalFrameCount = cartFrameCount + optionsFrameCount
-  
-  // Vérifier s'il y a une photo 30x45
-  const hasLargePhoto = cart.some(format => format.format === '30x45')
-  
-  // Calculer la livraison selon les nouvelles règles
-  const calculatedShipping = calculateShippingCost(totalFrameCount, hasLargePhoto)
-  
+  // Calculer la livraison par adresse en fonction du poids
+  const photoInstances = preparePhotoInstances()
+  const shippingData = calculateShippingByAddress(
+    photoInstances,
+    photoAddressDistributions,
+    giftAddresses
+  )
+
   // Obtenir les données de pricing normales
   const pricingData = calculateOrderPricing(prepareCartItems())
-  
-  // Remplacer la livraison par notre calcul
-  pricingData.shipping = calculatedShipping
+
+  // Remplacer la livraison par notre calcul par adresse
+  pricingData.shipping = shippingData.total
   
   const calculateFormatTotal = (format: CartFormat) => {
     // Calculer le total en tenant compte du withFrame individuel de chaque photo
@@ -144,11 +285,11 @@ export default function CartSummary({ cart, frameSelection, onUpdateCart, onProc
 
   // Utiliser les données de pricing calculées
   const subtotal = pricingData.subtotal
-  // Le finalSubtotal doit être : sous-total - réduction DUO - réduction palier
-  const finalSubtotal = subtotal - pricingData.duoDiscount - pricingData.tierDiscount
+  // Le finalSubtotal doit être : sous-total - réduction DUO - réduction palier + cadres
+  const finalSubtotal = subtotal - pricingData.duoDiscount - pricingData.tierDiscount + framesTotal
   const shipping = pricingData.shipping
-  // Le total avant promo : photos après réductions + cadres + livraison
-  const totalBeforePromo = finalSubtotal + framesTotal + shipping
+  // Le total avant promo : photos après réductions (incluant cadres) + livraison
+  const totalBeforePromo = finalSubtotal + shipping
   const total = totalBeforePromo - promoDiscount
 
   // Fonction pour valider le code promo via l'API
@@ -336,270 +477,278 @@ export default function CartSummary({ cart, frameSelection, onUpdateCart, onProc
 
   return (
     <div className="space-y-6">
-      {/* Version Desktop */}
+      {/* Version Desktop - Galerie */}
       <div className="hidden md:block">
         <div className="bg-white rounded-xl shadow-lg p-6">
-          <div className="flex justify-between items-start mb-4">
-            <h3 className="text-lg font-semibold">Votre sélection</h3>
-          </div>
-          <table className="w-full">
-            <thead>
-              <tr>
-                <th className="text-left pb-3 text-gray-600 font-medium">Format</th>
-                <th className="text-left pb-3 pl-4 text-gray-600 font-medium">Photos</th>
-                <th className="text-right pb-3 pr-4 text-gray-600 font-medium">Prix</th>
-                <th className="pb-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {cart.map((format, formatIndex) => {
-                const { forMe, gifts } = groupPhotosByDestination(format)
-                const rowCount = (forMe.length > 0 ? 1 : 0) + Object.keys(gifts).length
-                
-                return (
-                  <React.Fragment key={formatIndex}>
-                    {/* Photos pour moi */}
-                    {forMe.length > 0 && (
-                      <tr key={`${formatIndex}-forme`}>
-                        <td className="py-4 pr-4" rowSpan={rowCount}>
-                          <div className="font-semibold">{formatDisplay(format.format)}</div>
-                        </td>
-                        <td className="py-4 px-4">
-                          <div className="flex flex-wrap gap-2 max-w-md">
-                            {forMe.map((photo) => (
-                              <div key={photo.id} className="relative">
-                                <div className="relative group">
-                                  <img 
-                                    src={photo.photoPreview} 
-                                    alt=""
-                                    className="w-16 h-16 object-cover rounded"
-                                  />
-                                  {photo.quantity > 1 && (
-                                    <span className="absolute -top-2 -right-2 bg-orange-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                                      {photo.quantity}
-                                    </span>
-                                  )}
-                                  {/* Indicateur message */}
-                                  {photo.message && (
-                                    <div className="absolute bottom-1 right-1 bg-pink-500/90 rounded-full p-0.5">
-                                      <MessageSquare className="w-2.5 h-2.5 text-white" />
-                                    </div>
-                                  )}
-                                  {/* Indicateur cadre */}
-                                  {photo.withFrame && format.format !== 'carre' && (
-                                    <div className="absolute top-1 left-1 bg-gray-800/80 text-white text-[10px] px-1 rounded">
-                                      Cadre
-                                    </div>
-                                  )}
-                                </div>
-                                {photo.message && (
-                                  <div className="text-xs text-gray-600 italic mt-1 max-w-16 break-words">
-                                    {photo.message}
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </td>
-                        <td className="py-4 pr-4 text-right" rowSpan={rowCount}>
-                          <div className="font-semibold">
-                            {calculateFormatTotal(format).toFixed(2)}€
-                          </div>
-                        </td>
-                        <td className="py-4 pl-4 text-right" rowSpan={rowCount}>
-                          <div className="flex gap-2 justify-end">
-                            {onEditFormat && (
-                              <button
-                                onClick={() => onEditFormat(formatIndex)}
-                                className="text-blue-500 hover:text-blue-700"
-                                title="Modifier"
-                              >
-                                <Edit className="w-5 h-5" />
-                              </button>
-                            )}
-                            <button
-                              onClick={() => removeFormat(formatIndex)}
-                              className="text-red-500 hover:text-red-700"
-                              title="Supprimer"
-                            >
-                              <Trash2 className="w-5 h-5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
+          {/* Grouper par format */}
+          {cart.map((format, formatIndex) => (
+            <div key={formatIndex} className="mb-8 last:mb-0">
+              {/* En-tête du format avec boutons d'action */}
+              <div className="flex justify-between items-center mb-4 pb-3 border-b-2 border-gray-200">
+                <h4 className="font-semibold text-lg">{formatDisplay(format.format)}</h4>
+                <div className="flex items-center gap-3">
+                  <div className="flex gap-2">
+                    {onEditFormat && (
+                      <button
+                        onClick={() => onEditFormat(formatIndex)}
+                        className="text-blue-500 hover:text-blue-700"
+                        title="Modifier"
+                      >
+                        <Edit className="w-5 h-5" />
+                      </button>
                     )}
-                    
-                    {/* Photos cadeaux */}
-                    {Object.entries(gifts).map(([key, giftPhotos], giftIndex) => {
-                      const firstPhoto = giftPhotos[0]
-                      return (
-                        <tr key={`${formatIndex}-gift-${giftIndex}`}>
-                          {forMe.length === 0 && giftIndex === 0 && (
-                            <>
-                              <td className="p-4" rowSpan={Object.keys(gifts).length}>
-                                <div className="font-semibold">{formatDisplay(format.format)}</div>
-                              </td>
-                            </>
-                          )}
-                          <td className="py-4 px-4">
-                            <div className="flex flex-wrap gap-2 max-w-md">
-                              {giftPhotos.map((photo) => (
-                                <div key={photo.id} className="relative">
-                                  <div className="relative group">
-                                    <img 
-                                      src={photo.photoPreview} 
-                                      alt=""
-                                      className="w-16 h-16 object-cover rounded"
-                                    />
-                                    {photo.quantity > 1 && (
-                                      <span className="absolute -top-2 -right-2 bg-purple-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                                        {photo.quantity}
-                                      </span>
-                                    )}
-                                    {/* Indicateur message */}
-                                    {photo.message && (
-                                      <div className="absolute bottom-1 right-1 bg-pink-500/90 rounded-full p-0.5">
-                                        <MessageSquare className="w-2.5 h-2.5 text-white" />
-                                      </div>
-                                    )}
-                                  </div>
-                                  {photo.message && (
-                                    <div className="text-xs text-gray-600 italic mt-1 max-w-16 break-words">
-                                      {photo.message}
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          </td>
-                          {forMe.length === 0 && giftIndex === 0 && (
-                            <>
-                              <td className="py-4 pr-4 text-right" rowSpan={Object.keys(gifts).length}>
-                                <div className="font-semibold">
-                                  {calculateFormatTotal(format).toFixed(2)}€
-                                </div>
-                              </td>
-                              <td className="py-4 pl-4 text-right" rowSpan={Object.keys(gifts).length}>
-                                <div className="flex gap-2 justify-end">
-                                  {onEditFormat && (
-                                    <button
-                                      onClick={() => onEditFormat(formatIndex)}
-                                      className="text-blue-500 hover:text-blue-700"
-                                      title="Modifier"
-                                    >
-                                      <Edit className="w-5 h-5" />
-                                    </button>
-                                  )}
-                                  <button
-                                    onClick={() => removeFormat(formatIndex)}
-                                    className="text-red-500 hover:text-red-700"
-                                    title="Supprimer"
-                                  >
-                                    <Trash2 className="w-5 h-5" />
-                                  </button>
-                                </div>
-                              </td>
-                            </>
-                          )}
-                        </tr>
-                      )
-                    })}
-                  </React.Fragment>
+                    <button
+                      onClick={() => removeFormat(formatIndex)}
+                      className="text-red-500 hover:text-red-700"
+                      title="Supprimer"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Créer les instances de photos (avec/sans cadres) */}
+              {(() => {
+                const allPhotoInstances = format.photos.flatMap(photo => {
+                  const frameQuantity = photo.frameQuantity || 0
+                  const noFrameQuantity = photo.quantity - frameQuantity
+                  const photoInstances = []
+
+                  // Créer UNE instance pour les versions avec cadres (si > 0)
+                  if (frameQuantity > 0) {
+                    photoInstances.push({
+                      ...photo,
+                      instanceKey: `${photo.id}-framed`,
+                      showFrame: true,
+                      displayQuantity: frameQuantity
+                    })
+                  }
+
+                  // Créer UNE instance pour les versions sans cadres (si > 0)
+                  if (noFrameQuantity > 0) {
+                    photoInstances.push({
+                      ...photo,
+                      instanceKey: `${photo.id}-noframe`,
+                      showFrame: false,
+                      displayQuantity: noFrameQuantity
+                    })
+                  }
+
+                  return photoInstances
+                })
+
+                // Séparer en deux groupes
+                const photosWithoutFrame = allPhotoInstances.filter(p => !p.showFrame)
+                const photosWithFrame = allPhotoInstances.filter(p => p.showFrame)
+
+                // Calculer totaux pour chaque groupe
+                const countWithoutFrame = photosWithoutFrame.reduce((sum, p) => sum + p.displayQuantity, 0)
+                const priceWithoutFrame = photosWithoutFrame.reduce((sum, p) => {
+                  const price = getPhotoPrice(format.format as PhotoFormat, false).total
+                  return sum + (price * p.displayQuantity)
+                }, 0)
+
+                const countWithFrame = photosWithFrame.reduce((sum, p) => sum + p.displayQuantity, 0)
+                const priceWithFrame = photosWithFrame.reduce((sum, p) => {
+                  const price = getPhotoPrice(format.format as PhotoFormat, true).total
+                  return sum + (price * p.displayQuantity)
+                }, 0)
+
+                // Rendu des deux sections
+                return (
+                  <>
+                    {/* Section: Photos sans cadres */}
+                    {photosWithoutFrame.length > 0 && (
+                      <div className="mb-6">
+                        {/* En-tête de section */}
+                        <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-300">
+                          <h5 className="text-sm font-medium text-gray-700">Sans cadres</h5>
+                          <div className="flex items-center gap-4 text-sm">
+                            <span className="text-gray-600">{countWithoutFrame} photo{countWithoutFrame > 1 ? 's' : ''}</span>
+                            <span className="font-semibold text-gray-900">{priceWithoutFrame.toFixed(2)}€</span>
+                          </div>
+                        </div>
+
+                        {/* Grille de photos sans cadres */}
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                          {photosWithoutFrame.map(photoInstance => (
+                  <div key={photoInstance.instanceKey} className="relative group">
+                    {/* Afficher mockup si showFrame, sinon photo normale */}
+                    <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                      {isGeneratingMockups && photoInstance.showFrame ? (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+                        </div>
+                      ) : photoInstance.showFrame && photoMockups[photoInstance.id] ? (
+                        <img
+                          src={photoMockups[photoInstance.id]}
+                          alt="Photo encadrée"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <img
+                          src={photoInstance.photoPreview}
+                          alt="Photo"
+                          className="w-full h-full object-contain"
+                        />
+                      )}
+                    </div>
+
+                    {/* Indicateur cadeau */}
+                    {photoInstance.isGift && (
+                      <div className="absolute top-2 left-2 bg-purple-500/90 text-white text-xs px-2 py-1 rounded shadow-lg">
+                        🎁 Cadeau
+                      </div>
+                    )}
+
+                    {/* Message en bas */}
+                    {photoInstance.message && (
+                      <div className="mt-2 text-xs text-gray-600 italic truncate" title={photoInstance.message}>
+                        "{photoInstance.message}"
+                      </div>
+                    )}
+
+                    {/* Sélecteur d'adresse de livraison */}
+                    <div className="mt-2">
+                      <PhotoAddressDistributor
+                        instanceKey={photoInstance.instanceKey}
+                        totalQuantity={photoInstance.displayQuantity}
+                        currentDistributions={photoAddressDistributions[photoInstance.instanceKey] || []}
+                        availableAddresses={giftAddresses}
+                        onDistribute={(distributions) => onPhotoAddressDistribution(photoInstance.instanceKey, distributions)}
+                      />
+                    </div>
+
+                    {/* Prix unitaire */}
+                    <div className="mt-2 text-center text-sm text-gray-700">
+                      <span className="font-semibold">
+                        {getPhotoPrice(format.format as PhotoFormat, photoInstance.showFrame).total.toFixed(2)}€
+                      </span>
+                      <span className="text-gray-500"> / unité</span>
+                    </div>
+
+                    {/* Stepper de quantité */}
+                    {onUpdatePhotoQuantity && (
+                      <QuantityStepper
+                        quantity={photoInstance.displayQuantity}
+                        onIncrement={() => {
+                          onUpdatePhotoQuantity(formatIndex, photoInstance.id, 1, photoInstance.showFrame)
+                        }}
+                        onDecrement={() => {
+                          onUpdatePhotoQuantity(formatIndex, photoInstance.id, -1, photoInstance.showFrame)
+                        }}
+                      />
+                    )}
+                  </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Section: Photos avec cadres */}
+                    {photosWithFrame.length > 0 && (
+                      <div className="mb-6">
+                        {/* En-tête de section */}
+                        <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-300">
+                          <h5 className="text-sm font-medium text-gray-700">Avec cadres</h5>
+                          <div className="flex items-center gap-4 text-sm">
+                            <span className="text-gray-600">{countWithFrame} photo{countWithFrame > 1 ? 's' : ''}</span>
+                            <span className="font-semibold text-gray-900">{priceWithFrame.toFixed(2)}€</span>
+                          </div>
+                        </div>
+
+                        {/* Grille de photos avec cadres */}
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                          {photosWithFrame.map(photoInstance => (
+                  <div key={photoInstance.instanceKey} className="relative group">
+                    {/* Afficher mockup si showFrame, sinon photo normale */}
+                    <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                      {isGeneratingMockups && photoInstance.showFrame ? (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+                        </div>
+                      ) : photoInstance.showFrame && photoMockups[photoInstance.id] ? (
+                        <img
+                          src={photoMockups[photoInstance.id]}
+                          alt="Photo encadrée"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <img
+                          src={photoInstance.photoPreview}
+                          alt="Photo"
+                          className="w-full h-full object-contain"
+                        />
+                      )}
+                    </div>
+
+                    {/* Indicateur cadeau */}
+                    {photoInstance.isGift && (
+                      <div className="absolute top-2 left-2 bg-purple-500/90 text-white text-xs px-2 py-1 rounded shadow-lg">
+                        🎁 Cadeau
+                      </div>
+                    )}
+
+                    {/* Message en bas */}
+                    {photoInstance.message && (
+                      <div className="mt-2 text-xs text-gray-600 italic truncate" title={photoInstance.message}>
+                        "{photoInstance.message}"
+                      </div>
+                    )}
+
+                    {/* Sélecteur d'adresse de livraison */}
+                    <div className="mt-2">
+                      <PhotoAddressDistributor
+                        instanceKey={photoInstance.instanceKey}
+                        totalQuantity={photoInstance.displayQuantity}
+                        currentDistributions={photoAddressDistributions[photoInstance.instanceKey] || []}
+                        availableAddresses={giftAddresses}
+                        onDistribute={(distributions) => onPhotoAddressDistribution(photoInstance.instanceKey, distributions)}
+                      />
+                    </div>
+
+                    {/* Prix unitaire */}
+                    <div className="mt-2 text-center text-sm text-gray-700">
+                      <span className="font-semibold">
+                        {getPhotoPrice(format.format as PhotoFormat, photoInstance.showFrame).total.toFixed(2)}€
+                      </span>
+                      <span className="text-gray-500"> / unité</span>
+                    </div>
+
+                    {/* Stepper de quantité */}
+                    {onUpdatePhotoQuantity && (
+                      <QuantityStepper
+                        quantity={photoInstance.displayQuantity}
+                        onIncrement={() => {
+                          onUpdatePhotoQuantity(formatIndex, photoInstance.id, 1, photoInstance.showFrame)
+                        }}
+                        onDecrement={() => {
+                          onUpdatePhotoQuantity(formatIndex, photoInstance.id, -1, photoInstance.showFrame)
+                        }}
+                      />
+                    )}
+                  </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )
-              })}
-            </tbody>
-          </table>
+              })()}
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* Récapitulatif des cadres */}
-      {frameSelection && (Object.values(frameSelection).some(qty => qty > 0)) && (
-        <div className="bg-white rounded-xl shadow-lg p-6 relative">
-          <div className="flex justify-between items-start mb-4">
-            <div className="flex items-center gap-2">
-              <Frame className="w-5 h-5 text-gray-600" />
-              <h3 className="text-lg font-semibold">Cadres sélectionnés</h3>
-            </div>
-            {onEditFrames && (
-              <button
-                onClick={onEditFrames}
-                className="text-gray-600 hover:text-orange-600 transition-colors"
-                title="Modifier les cadres"
-              >
-                <SquarePen className="w-5 h-5" />
-              </button>
-            )}
-          </div>
-          
-          {Object.entries(frameSelection).map(([format, quantity]) => {
-            if (quantity === 0) return null
-            const framePrices = {
-              '10x15': 12.90,
-              '20x30': 16.90,
-              '30x45': 19.90
-            }
-            const price = framePrices[format as keyof typeof framePrices]
-            const total = price * quantity
-            
-            return (
-              <div key={format} className="flex items-center justify-between mb-3 p-2 rounded-lg hover:bg-gray-50">
-                <div className="flex items-center gap-3 flex-1">
-                  <div className="w-16 h-16 bg-gray-100 rounded overflow-hidden">
-                    <img 
-                      src={format === '10x15' ? '/images/cadre-10x15-new.png' :
-                           format === '20x30' ? '/images/cadre-20x30.png' :
-                           format === '30x45' ? '/images/cadre-30x45.png' : ''}
-                      alt={`Cadre ${format}`}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <span className="text-gray-700 font-medium">
-                      Cadre {format === '10x15' ? '10×15 cm' : 
-                             format === '20x30' ? '20×30 cm' : 
-                             format === '30x45' ? '30×45 cm' : format}
-                    </span>
-                    <div className="text-sm text-gray-500">{price.toFixed(2)}€ / unité</div>
-                  </div>
-                </div>
-                
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => onUpdateFrameQuantity && onUpdateFrameQuantity(format as keyof FrameSelection, quantity - 1)}
-                      disabled={quantity === 0}
-                      className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Minus className="w-4 h-4" />
-                    </button>
-                    <span className="w-8 text-center font-semibold">{quantity}</span>
-                    <button
-                      onClick={() => onUpdateFrameQuantity && onUpdateFrameQuantity(format as keyof FrameSelection, quantity + 1)}
-                      className="w-8 h-8 rounded-full bg-orange-500 hover:bg-orange-600 text-white flex items-center justify-center"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <span className="font-semibold w-20 text-right">{total.toFixed(2)}€</span>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {/* Version Mobile */}
-      <div className="md:hidden space-y-4">
-        {cart.map((format, formatIndex) => {
-          const { forMe, gifts } = groupPhotosByDestination(format)
-          
-          return (
-            <div key={formatIndex} className="bg-white rounded-xl shadow-lg p-4">
-              {/* Format */}
-              <div className="flex justify-between items-start mb-3">
-                <div>
-                  <div className="font-semibold">{formatDisplay(format.format)}</div>
-                </div>
+      {/* Version Mobile - Galerie */}
+      <div className="md:hidden space-y-6">
+        {cart.map((format, formatIndex) => (
+          <div key={formatIndex} className="bg-white rounded-xl shadow-lg p-4">
+            {/* En-tête du format avec boutons d'action */}
+            <div className="flex justify-between items-center mb-4 pb-3 border-b-2 border-gray-200">
+              <h4 className="font-semibold text-base">{formatDisplay(format.format)}</h4>
+              <div className="flex items-center gap-3">
                 <div className="flex gap-2">
                   {onEditFormat && (
                     <button
@@ -619,102 +768,131 @@ export default function CartSummary({ cart, frameSelection, onUpdateCart, onProc
                   </button>
                 </div>
               </div>
-
-              {/* Photos et destinations */}
-              <div className="space-y-3">
-                {forMe.length > 0 && (
-                  <div className="flex gap-4 pb-3 border-b">
-                    <div className="flex gap-2 flex-wrap flex-1">
-                      {forMe.map((photo) => (
-                        <div key={photo.id} className="relative">
-                          <div className="relative">
-                            <img 
-                              src={photo.photoPreview} 
-                              alt=""
-                              className="w-12 h-12 object-cover rounded"
-                            />
-                            {photo.quantity > 1 && (
-                              <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center text-[10px]">
-                                {photo.quantity}
-                              </span>
-                            )}
-                            {/* Mini indicateur message */}
-                            {photo.message && (
-                              <MessageSquare className="absolute bottom-0.5 right-0.5 w-2 h-2 text-white bg-pink-500/80 rounded-full p-0.5" />
-                            )}
-                          </div>
-                          {photo.message && (
-                            <div className="text-[10px] text-gray-600 italic mt-1 max-w-12 break-words">
-                              {photo.message}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    <div className="text-sm text-gray-600">Pour moi</div>
-                  </div>
-                )}
-
-                {Object.entries(gifts).map(([key, giftPhotos]) => {
-                  const firstPhoto = giftPhotos[0]
-                  return (
-                    <div key={key} className="flex gap-4 pb-3 border-b">
-                      <div className="flex gap-2 flex-wrap flex-1">
-                        {giftPhotos.map((photo) => (
-                          <div key={photo.id} className="relative">
-                            <div className="relative">
-                              <img 
-                                src={photo.photoPreview} 
-                                alt=""
-                                className="w-12 h-12 object-cover rounded"
-                              />
-                              {photo.quantity > 1 && (
-                                <span className="absolute -top-1 -right-1 bg-purple-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center text-[10px]">
-                                  {photo.quantity}
-                                </span>
-                              )}
-                              {/* Mini indicateur message */}
-                              {photo.message && (
-                                <MessageSquare className="absolute bottom-0.5 right-0.5 w-2 h-2 text-white bg-pink-500/80 rounded-full p-0.5" />
-                              )}
-                            </div>
-                            {photo.message && (
-                              <div className="text-[10px] text-gray-600 italic mt-1 max-w-12 break-words">
-                                {photo.message}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                      <div className="text-xs">
-                        <div className="font-medium text-purple-600">Cadeau</div>
-                        <div>{firstPhoto.giftFirstName} {firstPhoto.giftLastName}</div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-
-              {/* Prix */}
-              <div className="mt-3 pt-3 text-right">
-                <span className="font-semibold text-lg">
-                  {calculateFormatTotal(format).toFixed(2)}€
-                </span>
-              </div>
             </div>
-          )
-        })}
+
+            {/* Grille de photos - 2 colonnes sur mobile */}
+            <div className="grid grid-cols-2 gap-3">
+              {format.photos.flatMap(photo => {
+                const frameQuantity = photo.frameQuantity || 0
+                const noFrameQuantity = photo.quantity - frameQuantity
+                const photoInstances = []
+
+                // Créer UNE instance pour les versions avec cadres (si > 0)
+                if (frameQuantity > 0) {
+                  photoInstances.push({
+                    ...photo,
+                    instanceKey: `${photo.id}-framed`,
+                    showFrame: true,
+                    displayQuantity: frameQuantity
+                  })
+                }
+
+                // Créer UNE instance pour les versions sans cadres (si > 0)
+                if (noFrameQuantity > 0) {
+                  photoInstances.push({
+                    ...photo,
+                    instanceKey: `${photo.id}-noframe`,
+                    showFrame: false,
+                    displayQuantity: noFrameQuantity
+                  })
+                }
+
+                return photoInstances
+              }).map(photoInstance => (
+                <div key={photoInstance.instanceKey} className="relative group">
+                  {/* Afficher mockup si showFrame, sinon photo normale */}
+                  <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                    {isGeneratingMockups && photoInstance.showFrame ? (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-orange-500"></div>
+                      </div>
+                    ) : photoInstance.showFrame && photoMockups[photoInstance.id] ? (
+                      <img
+                        src={photoMockups[photoInstance.id]}
+                        alt="Photo encadrée"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <img
+                        src={photoInstance.photoPreview}
+                        alt="Photo"
+                        className="w-full h-full object-contain"
+                      />
+                    )}
+                  </div>
+
+                  {/* Indicateur cadeau */}
+                  {photoInstance.isGift && (
+                    <div className="absolute top-1.5 left-1.5 bg-purple-500/90 rounded-full p-1 shadow-lg">
+                      <Gift className="w-2.5 h-2.5 text-white" />
+                    </div>
+                  )}
+
+                  {/* Message en bas */}
+                  {photoInstance.message && (
+                    <div className="mt-1 text-[10px] text-gray-600 italic truncate" title={photoInstance.message}>
+                      "{photoInstance.message}"
+                    </div>
+                  )}
+
+                  {/* Sélecteur d'adresse de livraison - Mobile */}
+                  <div className="mt-1">
+                    <PhotoAddressDistributor
+                      instanceKey={photoInstance.instanceKey}
+                      totalQuantity={photoInstance.displayQuantity}
+                      currentDistributions={photoAddressDistributions[photoInstance.instanceKey] || []}
+                      availableAddresses={giftAddresses}
+                      onDistribute={(distributions) => onPhotoAddressDistribution(photoInstance.instanceKey, distributions)}
+                    />
+                  </div>
+
+                  {/* Prix unitaire */}
+                  <div className="mt-1 text-center text-xs text-gray-700">
+                    <span className="font-semibold">
+                      {getPhotoPrice(format.format as PhotoFormat, photoInstance.showFrame).total.toFixed(2)}€
+                    </span>
+                    <span className="text-gray-500"> / unité</span>
+                  </div>
+
+                  {/* Stepper de quantité */}
+                  {onUpdatePhotoQuantity && (
+                    <QuantityStepper
+                      quantity={photoInstance.displayQuantity}
+                      onIncrement={() => {
+                        onUpdatePhotoQuantity(formatIndex, photoInstance.id, 1, photoInstance.showFrame)
+                      }}
+                      onDecrement={() => {
+                        onUpdatePhotoQuantity(formatIndex, photoInstance.id, -1, photoInstance.showFrame)
+                      }}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Gestion des adresses de livraison */}
+      <div className="bg-white rounded-xl shadow-lg p-6">
+        {/* Section adresses cadeaux avec gestionnaire centralisé */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Adresses de livraison</h3>
+
+          <GiftAddressManager
+            addresses={giftAddresses}
+            onAddAddress={onAddGiftAddress}
+            onEditAddress={onEditGiftAddress}
+            onDeleteAddress={onDeleteGiftAddress}
+          />
+        </div>
       </div>
 
       {/* Délais de livraison */}
       <div className="bg-white rounded-xl shadow-lg p-6 mb-4">
-        <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
-          <Truck className="w-5 h-5 text-orange-500" />
-          Délais de livraison estimés
-        </h3>
         <div className="flex items-center justify-between bg-orange-50 rounded-lg p-4">
           <div className="flex items-center gap-3">
-            <Calendar className="w-5 h-5 text-orange-600" />
+            <Truck className="w-5 h-5 text-orange-500" />
             <div>
               <p className="font-medium text-gray-900">Livraison prévue</p>
               <p className="text-sm text-gray-600">
@@ -738,7 +916,7 @@ export default function CartSummary({ cart, frameSelection, onUpdateCart, onProc
           </div>
           <div className="flex justify-between">
             <span>Sous-total photos</span>
-            <span className="font-semibold">{subtotal.toFixed(2)}€</span>
+            <span className="font-semibold">{(subtotal + framesTotal).toFixed(2)}€</span>
           </div>
           
           {/* Réductions appliquées */}
@@ -768,18 +946,32 @@ export default function CartSummary({ cart, frameSelection, onUpdateCart, onProc
               <span>{finalSubtotal.toFixed(2)}€</span>
             </div>
           )}
-          
-          {framesTotal > 0 && (
-            <div className="flex justify-between">
-              <span>Cadres ({totalFrames})</span>
-              <span className="font-semibold">{framesTotal.toFixed(2)}€</span>
+
+          {/* Frais de livraison */}
+          {shippingData.byAddress.length === 1 ? (
+            // Une seule adresse : affichage simple
+            <div className="flex justify-between text-sm text-gray-600">
+              <span>Frais de livraison</span>
+              <span>{shipping.toFixed(2)}€</span>
+            </div>
+          ) : (
+            // Plusieurs adresses : affichage détaillé
+            <div className="space-y-1">
+              <div className="text-sm font-medium text-gray-700">Frais de livraison :</div>
+              {shippingData.byAddress.map((detail, index) => (
+                <div key={index} className="flex justify-between text-xs text-gray-600 pl-3">
+                  <span>
+                    {detail.addressName}
+                  </span>
+                  <span>{detail.cost.toFixed(2)}€</span>
+                </div>
+              ))}
+              <div className="flex justify-between text-sm font-semibold text-gray-700 pt-1 border-t">
+                <span>Total livraison</span>
+                <span>{shipping.toFixed(2)}€</span>
+              </div>
             </div>
           )}
-          
-          <div className="flex justify-between text-sm text-gray-600">
-            <span>Frais de livraison</span>
-            <span>{shipping.toFixed(2)}€</span>
-          </div>
           
           {/* Section Code Promo */}
           <div className="pt-3 border-t">
@@ -888,7 +1080,7 @@ export default function CartSummary({ cart, frameSelection, onUpdateCart, onProc
             </div>
           )}
           
-          <div className="pt-3 border-t flex justify-between text-xl font-bold">
+          <div className="pt-3 border-t flex justify-between text-2xl font-bold">
             <span>Total</span>
             <div className="text-right">
               {promoDiscount > 0 && (
@@ -897,15 +1089,6 @@ export default function CartSummary({ cart, frameSelection, onUpdateCart, onProc
               <span className="text-orange-600">{total.toFixed(2)}€</span>
             </div>
           </div>
-          
-          {/* Message d'économie */}
-          {(pricingData.duoDiscount + pricingData.tierDiscount + promoDiscount) > 0 && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
-              <span className="text-green-700 font-semibold">
-                Vous économisez {(pricingData.duoDiscount + pricingData.tierDiscount + promoDiscount).toFixed(2)}€ !
-              </span>
-            </div>
-          )}
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3 mt-6">

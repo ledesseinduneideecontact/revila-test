@@ -9,20 +9,60 @@ export type PhotoOrientation = 'portrait' | 'landscape'
 interface MockupConfig {
   frameImagePath: string
   whiteThreshold: number // Seuil pour détecter la zone blanche (0-255)
+  position: { x: number; y: number }
+  dimensions: { width: number; height: number }
+  imageResolution: { width: number; height: number }
 }
 
-const MOCKUP_CONFIGS: Record<FrameFormat, MockupConfig> = {
+// Coordonnées précises basées sur mockup-cadres
+const MOCKUP_CONFIGS: Record<FrameFormat, Record<PhotoOrientation, MockupConfig>> = {
   '10x15': {
-    frameImagePath: '/frontend-pictures/commander/cadre-10x15-portrait-mockup.png',
-    whiteThreshold: 250
+    portrait: {
+      frameImagePath: '/frontend-pictures/commander/cadre-10x15-portrait-mockup.png',
+      whiteThreshold: 250,
+      position: { x: 334, y: 583 },
+      dimensions: { width: 347, height: 519 },
+      imageResolution: { width: 1024, height: 1658 }
+    },
+    landscape: {
+      frameImagePath: '/frontend-pictures/commander/cadre-10x15-paysage-mockup.png',
+      whiteThreshold: 250,
+      position: { x: 556, y: 334 },
+      dimensions: { width: 519, height: 347 },
+      imageResolution: { width: 1658, height: 1024 }
+    }
   },
   '20x30': {
-    frameImagePath: '/frontend-pictures/commander/cadre-20x30-portrait-mockup.png',
-    whiteThreshold: 250
+    portrait: {
+      frameImagePath: '/frontend-pictures/commander/cadre-20x30-portrait-mockup.png',
+      whiteThreshold: 250,
+      position: { x: 480, y: 345 },
+      dimensions: { width: 676, height: 955 },
+      imageResolution: { width: 1654, height: 1654 }
+    },
+    landscape: {
+      frameImagePath: '/frontend-pictures/commander/cadre-20x30-paysage-mockup.png',
+      whiteThreshold: 250,
+      position: { x: 354, y: 480 },
+      dimensions: { width: 955, height: 676 },
+      imageResolution: { width: 1654, height: 1654 }
+    }
   },
   '30x45': {
-    frameImagePath: '/frontend-pictures/commander/cadre-30x45-portrait-mockup.png',
-    whiteThreshold: 250
+    portrait: {
+      frameImagePath: '/frontend-pictures/commander/cadre-30x45-portrait-mockup.png',
+      whiteThreshold: 250,
+      position: { x: 443, y: 295 },
+      dimensions: { width: 772, height: 1091 },
+      imageResolution: { width: 1654, height: 1654 }
+    },
+    landscape: {
+      frameImagePath: '/frontend-pictures/commander/cadre-30x45-paysage-mockup.png',
+      whiteThreshold: 250,
+      position: { x: 268, y: 443 },
+      dimensions: { width: 1091, height: 772 },
+      imageResolution: { width: 1654, height: 1654 }
+    }
   }
 }
 
@@ -180,61 +220,35 @@ export async function generateFrameMockup(
   frameFormat: FrameFormat,
   orientation: PhotoOrientation = 'portrait'
 ): Promise<Blob> {
-  const config = MOCKUP_CONFIGS[frameFormat]
+  // Utiliser les coordonnées précises
+  const config = MOCKUP_CONFIGS[frameFormat][orientation]
 
   try {
+    console.log(`🖼️ Génération mockup ${frameFormat} ${orientation}`)
+    console.log(`📐 Config:`, {
+      position: config.position,
+      dimensions: config.dimensions,
+      mockup: config.frameImagePath
+    })
+
     // 1. Charger le cadre mockup
     const frameImg = await loadImage(config.frameImagePath)
 
     // 2. Charger la photo de l'utilisateur
     const photoImg = await blobToImage(photoBlob)
 
-    // 3. Créer un canvas pour le cadre
+    // 3. Créer un canvas pour le cadre avec la résolution exacte
     const frameCanvas = document.createElement('canvas')
-    const frameWidth = frameImg.width
-    const frameHeight = frameImg.height
-
-    // Si l'orientation est paysage, on doit pivoter le mockup
-    const needsRotation = orientation === 'landscape'
-
-    if (needsRotation) {
-      // Inverser largeur et hauteur pour la rotation
-      frameCanvas.width = frameHeight
-      frameCanvas.height = frameWidth
-    } else {
-      frameCanvas.width = frameWidth
-      frameCanvas.height = frameHeight
-    }
+    frameCanvas.width = config.imageResolution.width
+    frameCanvas.height = config.imageResolution.height
 
     const ctx = frameCanvas.getContext('2d', { willReadFrequently: true })
     if (!ctx) {
       throw new Error('Impossible de créer le contexte canvas')
     }
 
-    if (needsRotation) {
-      // Appliquer une rotation de 90° (sens horaire)
-      ctx.save()
-      ctx.translate(frameHeight, 0)
-      ctx.rotate(Math.PI / 2)
-      ctx.drawImage(frameImg, 0, 0, frameWidth, frameHeight)
-      ctx.restore()
-    } else {
-      // Dessiner le cadre normalement
-      ctx.drawImage(frameImg, 0, 0, frameWidth, frameHeight)
-    }
-
-    // 4. Détecter la zone blanche du cadre
-    const imageData = ctx.getImageData(0, 0, frameCanvas.width, frameCanvas.height)
-    const innerZone = detectInnerZone(imageData, config.whiteThreshold)
-
-    if (!innerZone) {
-      console.warn('Zone blanche non détectée, retour de la photo originale')
-      return photoBlob
-    }
-
-    console.log(`[${frameFormat}] Cadre: ${frameCanvas.width}x${frameCanvas.height}`)
-    console.log(`[${frameFormat}] Zone détectée:`, innerZone)
-    console.log(`[${frameFormat}] Ratio zone: ${(innerZone.width / innerZone.height).toFixed(3)}`)
+    // 4. Dessiner le cadre mockup
+    ctx.drawImage(frameImg, 0, 0, frameCanvas.width, frameCanvas.height)
 
     // 5. Créer un canvas pour la photo
     const photoCanvas = document.createElement('canvas')
@@ -246,20 +260,23 @@ export async function generateFrameMockup(
     }
     photoCtx.drawImage(photoImg, 0, 0)
 
-    // 6. Redimensionner et recadrer la photo en mode "cover"
+    // 6. Redimensionner et recadrer la photo en mode "cover" avec les dimensions exactes
     const resizedPhoto = resizeAndCropCover(
       photoCanvas,
-      innerZone.width,
-      innerZone.height
+      config.dimensions.width,
+      config.dimensions.height
     )
 
-    // 7. Insérer la photo dans le cadre
+    console.log(`✅ Photo redimensionnée: ${config.dimensions.width}x${config.dimensions.height}`)
+    console.log(`✅ Position dans le cadre: (${config.position.x}, ${config.position.y})`)
+
+    // 7. Insérer la photo dans le cadre aux coordonnées exactes
     ctx.drawImage(
       resizedPhoto,
-      innerZone.x,
-      innerZone.y,
-      innerZone.width,
-      innerZone.height
+      config.position.x,
+      config.position.y,
+      config.dimensions.width,
+      config.dimensions.height
     )
 
     // 8. Convertir le canvas en Blob
@@ -267,6 +284,7 @@ export async function generateFrameMockup(
       frameCanvas.toBlob(
         (blob) => {
           if (blob) {
+            console.log(`✅ Mockup généré avec succès pour ${frameFormat} ${orientation}`)
             resolve(blob)
           } else {
             reject(new Error('Impossible de générer le blob du mockup'))
@@ -331,6 +349,64 @@ function blobToVideoFrame(blob: Blob): Promise<HTMLVideoElement> {
 }
 
 /**
+ * Extrait une frame d'une vidéo à un timestamp spécifique
+ * @param video - L'élément vidéo HTML5
+ * @param timestamp - Le temps en secondes où extraire la frame
+ * @returns Un File contenant l'image de la frame
+ */
+export async function extractVideoFrame(
+  video: HTMLVideoElement,
+  timestamp: number
+): Promise<File> {
+  return new Promise((resolve, reject) => {
+    // Positionner la vidéo au timestamp souhaité
+    video.currentTime = timestamp
+
+    video.onseeked = async () => {
+      try {
+        // Créer un canvas aux dimensions de la vidéo
+        const canvas = document.createElement('canvas')
+        canvas.width = video.videoWidth
+        canvas.height = video.videoHeight
+        const ctx = canvas.getContext('2d')
+
+        if (!ctx) {
+          reject(new Error('Impossible de créer le contexte canvas'))
+          return
+        }
+
+        // Dessiner la frame actuelle sur le canvas
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+        // Convertir le canvas en Blob
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            reject(new Error('Impossible de créer le blob'))
+            return
+          }
+
+          // Créer un File à partir du Blob avec un nom descriptif
+          const timestamp_formatted = timestamp.toFixed(2).replace('.', '_')
+          const file = new File(
+            [blob],
+            `video-frame-${timestamp_formatted}s.jpg`,
+            { type: 'image/jpeg' }
+          )
+
+          resolve(file)
+        }, 'image/jpeg', 0.95) // Qualité JPEG à 95%
+      } catch (error) {
+        reject(error)
+      }
+    }
+
+    video.onerror = () => {
+      reject(new Error('Erreur lors du positionnement de la vidéo'))
+    }
+  })
+}
+
+/**
  * Crée un masque avec coins arrondis
  */
 function createRoundedRectMask(
@@ -355,44 +431,78 @@ function createRoundedRectMask(
 }
 
 /**
- * Génère un mockup avec une vidéo insérée dans un écran de téléphone
+ * Génère un mockup combiné avec une vidéo dans le téléphone ET une photo dans le cadre
  *
  * @param videoBlob - La vidéo de l'utilisateur (File ou Blob)
- * @returns Un Blob de l'image composite (première frame dans le téléphone)
+ * @param photoBlob - La photo de l'utilisateur (File ou Blob)
+ * @returns Un Blob de l'image composite (vidéo + photo dans le mockup)
  */
-export async function generateVideoMockup(videoBlob: Blob): Promise<Blob> {
-  const MOCKUP_PATH = '/frontend-pictures/commander/phone-and-picture-portrait-mockup.png'
-
-  // Coordonnées exactes de la zone téléphone
-  const PHONE_ZONE = {
-    x: 285,
-    y: 303,
-    width: 477,
-    height: 1037,
-    radius: 45 // Réduit de 63 à 45 pour éviter les bords blancs
-  }
-
+export async function generatePhotoAndVideoMockup(
+  videoBlob: Blob,
+  photoBlob: Blob
+): Promise<Blob> {
   try {
-    // 1. Charger le mockup de fond avec téléphone
-    const mockupImg = await loadImage(MOCKUP_PATH)
-
-    // 2. Extraire la première frame de la vidéo
+    // 1. Extraire la première frame de la vidéo
     const video = await blobToVideoFrame(videoBlob)
 
-    // 3. Créer le canvas final aux dimensions du mockup
+    // 2. Charger la photo de l'utilisateur
+    const photoImg = await blobToImage(photoBlob)
+
+    // 3. Détecter les orientations
+    const videoIsPortrait = video.videoHeight > video.videoWidth
+    const photoIsPortrait = photoImg.height > photoImg.width
+
+    console.log(`📱 Vidéo: ${videoIsPortrait ? 'Portrait' : 'Landscape'} (${video.videoWidth}×${video.videoHeight})`)
+    console.log(`🖼️ Photo: ${photoIsPortrait ? 'Portrait' : 'Landscape'} (${photoImg.width}×${photoImg.height})`)
+
+    // 4. Sélectionner le mockup complet approprié selon les 4 configurations
+    let mockupPath: string
+    let PHONE_ZONE: { x: number; y: number; width: number; height: number }
+    let CARD_ZONE: { x: number; y: number; width: number; height: number }
+
+    if (videoIsPortrait && photoIsPortrait) {
+      // 1️⃣ PHONE-PORTRAIT + CARD-PORTRAIT
+      console.log('📐 Configuration: PHONE-PORTRAIT + CARD-PORTRAIT')
+      mockupPath = '/frontend-pictures/commander/phone-portrait-card-portrait.png'
+      PHONE_ZONE = { x: 113, y: 232, width: 477, height: 1037 }
+      CARD_ZONE = { x: 677, y: 188, width: 750, height: 1124 }
+    } else if (videoIsPortrait && !photoIsPortrait) {
+      // 2️⃣ PHONE-PORTRAIT + CARD-LANDSCAPE
+      console.log('📐 Configuration: PHONE-PORTRAIT + CARD-LANDSCAPE')
+      mockupPath = '/frontend-pictures/commander/phone-portrait-card-landscape.png'
+      PHONE_ZONE = { x: 72, y: 323, width: 394, height: 855 }
+      CARD_ZONE = { x: 533, y: 441, width: 928, height: 618 }
+    } else if (!videoIsPortrait && photoIsPortrait) {
+      // 3️⃣ PHONE-LANDSCAPE + CARD-PORTRAIT
+      console.log('📐 Configuration: PHONE-LANDSCAPE + CARD-PORTRAIT')
+      mockupPath = '/frontend-pictures/commander/phone-landscape-card-portrait.png'
+      PHONE_ZONE = { x: 336, y: 90, width: 827, height: 381 }
+      CARD_ZONE = { x: 451, y: 544, width: 598, height: 897 }
+    } else {
+      // 4️⃣ PHONE-LANDSCAPE + CARD-LANDSCAPE
+      console.log('📐 Configuration: PHONE-LANDSCAPE + CARD-LANDSCAPE')
+      mockupPath = '/frontend-pictures/commander/phone-landscape-card-landscape.png'
+      PHONE_ZONE = { x: 231, y: 113, width: 1037, height: 477 }
+      CARD_ZONE = { x: 188, y: 677, width: 1124, height: 750 }
+    }
+
+    // 5. Charger le mockup complet
+    const mockupImg = await loadImage(mockupPath)
+
+    // 6. Créer le canvas final (1500×1500)
     const finalCanvas = document.createElement('canvas')
-    finalCanvas.width = mockupImg.width
-    finalCanvas.height = mockupImg.height
+    finalCanvas.width = 1500
+    finalCanvas.height = 1500
     const ctx = finalCanvas.getContext('2d', { willReadFrequently: true })
 
     if (!ctx) {
       throw new Error('Impossible de créer le contexte canvas')
     }
 
-    // 4. Dessiner le fond (image avec téléphone et cadre)
+    // 7. Dessiner le mockup complet en arrière-plan
     ctx.drawImage(mockupImg, 0, 0)
 
-    // 5. Créer un canvas temporaire pour la vidéo
+    // 8. Traiter la vidéo pour la zone téléphone (mode "cover")
     const videoCanvas = document.createElement('canvas')
     videoCanvas.width = video.videoWidth
     videoCanvas.height = video.videoHeight
@@ -402,33 +512,32 @@ export async function generateVideoMockup(videoBlob: Blob): Promise<Blob> {
       throw new Error('Impossible de créer le contexte canvas pour la vidéo')
     }
 
-    // Dessiner la frame vidéo
     videoCtx.drawImage(video, 0, 0)
 
-    // 6. Redimensionner la vidéo en mode "cover" pour remplir l'écran du téléphone
+    // Redimensionner la vidéo en mode "cover" pour la zone téléphone
     const resizedVideo = resizeAndCropCover(
       videoCanvas,
       PHONE_ZONE.width,
       PHONE_ZONE.height
     )
 
-    // 7. Appliquer le masque arrondi et dessiner la vidéo dans le téléphone
-    ctx.save()
+    // 9. Dessiner la vidéo dans la zone téléphone avec bords arrondis
+    // Utiliser des valeurs adaptées au canvas 1500x1500px (plus grandes que le CSS)
+    const phoneIsPortrait = PHONE_ZONE.width < PHONE_ZONE.height
+    const phoneRadius = phoneIsPortrait
+      ? Math.round(PHONE_ZONE.width * 0.10)  // 10% pour portrait → ~48px pour 477px
+      : Math.round(PHONE_ZONE.width * 0.04)  // 4% pour landscape → ~41px pour 1037px
 
-    // Créer le chemin du masque arrondi
+    ctx.save()
     createRoundedRectMask(
       ctx,
       PHONE_ZONE.x,
       PHONE_ZONE.y,
       PHONE_ZONE.width,
       PHONE_ZONE.height,
-      PHONE_ZONE.radius
+      phoneRadius
     )
-
-    // Appliquer le clipping
     ctx.clip()
-
-    // Dessiner la vidéo redimensionnée
     ctx.drawImage(
       resizedVideo,
       PHONE_ZONE.x,
@@ -436,15 +545,193 @@ export async function generateVideoMockup(videoBlob: Blob): Promise<Blob> {
       PHONE_ZONE.width,
       PHONE_ZONE.height
     )
-
     ctx.restore()
 
-    // 8. Convertir le canvas en Blob
+    // 10. Traiter la photo pour la zone carte (mode "cover")
+    const photoCanvas = document.createElement('canvas')
+    photoCanvas.width = photoImg.width
+    photoCanvas.height = photoImg.height
+    const photoCtx = photoCanvas.getContext('2d', { willReadFrequently: true })
+
+    if (!photoCtx) {
+      throw new Error('Impossible de créer le contexte canvas pour la photo')
+    }
+
+    photoCtx.drawImage(photoImg, 0, 0)
+
+    // Redimensionner la photo en mode "cover" pour la zone carte
+    const resizedPhoto = resizeAndCropCover(
+      photoCanvas,
+      CARD_ZONE.width,
+      CARD_ZONE.height
+    )
+
+    // 11. Dessiner la photo dans la zone carte avec bords arrondis
+    // Utiliser des valeurs adaptées au canvas 1500x1500px (proportionnelles à la largeur)
+    const cardRadius = Math.round(CARD_ZONE.width * 0.04)  // 4% de la largeur
+
+    ctx.save()
+    createRoundedRectMask(
+      ctx,
+      CARD_ZONE.x,
+      CARD_ZONE.y,
+      CARD_ZONE.width,
+      CARD_ZONE.height,
+      cardRadius
+    )
+    ctx.clip()
+    ctx.drawImage(
+      resizedPhoto,
+      CARD_ZONE.x,
+      CARD_ZONE.y,
+      CARD_ZONE.width,
+      CARD_ZONE.height
+    )
+    ctx.restore()
+
+    // 12. Convertir le canvas en Blob
     return new Promise((resolve, reject) => {
       finalCanvas.toBlob(
         (blob) => {
           if (blob) {
-            console.log('✅ Mockup vidéo généré avec succès')
+            console.log('✅ Mockup combiné (vidéo + photo) généré avec succès (approche template)')
+            resolve(blob)
+          } else {
+            reject(new Error('Impossible de générer le blob du mockup combiné'))
+          }
+        },
+        'image/png',
+        1.0 // Qualité maximale
+      )
+    })
+
+  } catch (error) {
+    console.error('Erreur lors de la génération du mockup combiné:', error)
+    throw error
+  }
+}
+
+/**
+ * Génère un mockup avec une vidéo insérée dans un écran de téléphone
+ * Approche modulaire : Fond bois + Phone mockup + Vidéo
+ *
+ * @param videoBlob - La vidéo de l'utilisateur (File ou Blob)
+ * @returns Un Blob de l'image composite (première frame dans le téléphone sur fond bois)
+ */
+export async function generateVideoMockup(videoBlob: Blob): Promise<Blob> {
+  try {
+    // 1. Extraire la première frame de la vidéo
+    const video = await blobToVideoFrame(videoBlob)
+
+    // 2. Détecter l'orientation de la vidéo
+    const videoIsPortrait = video.videoHeight > video.videoWidth
+    console.log(`📱 Vidéo: ${videoIsPortrait ? 'Portrait' : 'Landscape'} (${video.videoWidth}×${video.videoHeight})`)
+
+    // 3. Sélectionner le mockup complet approprié
+    const mockupPath = videoIsPortrait
+      ? '/frontend-pictures/commander/phone-portrait-card-portrait.png'
+      : '/frontend-pictures/commander/phone-landscape-card-landscape.png'
+
+    // 4. Charger le mockup complet
+    const mockupImg = await loadImage(mockupPath)
+    console.log(`📐 Mockup sélectionné: ${videoIsPortrait ? 'phone-portrait-card-portrait' : 'phone-landscape-card-landscape'}`)
+
+    // 5. Définir les zones selon l'orientation de la vidéo
+    const PHONE_ZONE = videoIsPortrait
+      ? { x: 113, y: 232, width: 477, height: 1037 }
+      : { x: 231, y: 113, width: 1037, height: 477 }
+
+    const CARD_ZONE = videoIsPortrait
+      ? { x: 677, y: 188, width: 750, height: 1124 }
+      : { x: 188, y: 677, width: 1124, height: 750 }
+
+    // 6. Créer le canvas final (1500×1500)
+    const finalCanvas = document.createElement('canvas')
+    finalCanvas.width = 1500
+    finalCanvas.height = 1500
+    const ctx = finalCanvas.getContext('2d', { willReadFrequently: true })
+
+    if (!ctx) {
+      throw new Error('Impossible de créer le contexte canvas')
+    }
+
+    // 7. Dessiner le mockup complet en arrière-plan
+    ctx.drawImage(mockupImg, 0, 0)
+
+    // 8. Traiter la vidéo pour la zone téléphone (mode "cover")
+    const videoCanvas = document.createElement('canvas')
+    videoCanvas.width = video.videoWidth
+    videoCanvas.height = video.videoHeight
+    const videoCtx = videoCanvas.getContext('2d', { willReadFrequently: true })
+
+    if (!videoCtx) {
+      throw new Error('Impossible de créer le contexte canvas pour la vidéo')
+    }
+
+    videoCtx.drawImage(video, 0, 0)
+
+    // 9. Redimensionner la vidéo en mode "cover" pour la zone téléphone
+    const resizedVideo = resizeAndCropCover(
+      videoCanvas,
+      PHONE_ZONE.width,
+      PHONE_ZONE.height
+    )
+
+    // 10. Dessiner la vidéo dans la zone téléphone avec bords arrondis
+    // Utiliser des valeurs adaptées au canvas 1500x1500px (plus grandes que le CSS)
+    const phoneIsPortrait = PHONE_ZONE.width < PHONE_ZONE.height
+    const phoneRadius = phoneIsPortrait
+      ? Math.round(PHONE_ZONE.width * 0.10)  // 10% pour portrait → ~48px pour 477px
+      : Math.round(PHONE_ZONE.width * 0.04)  // 4% pour landscape → ~41px pour 1037px
+
+    ctx.save()
+    createRoundedRectMask(
+      ctx,
+      PHONE_ZONE.x,
+      PHONE_ZONE.y,
+      PHONE_ZONE.width,
+      PHONE_ZONE.height,
+      phoneRadius
+    )
+    ctx.clip()
+    ctx.drawImage(
+      resizedVideo,
+      PHONE_ZONE.x,
+      PHONE_ZONE.y,
+      PHONE_ZONE.width,
+      PHONE_ZONE.height
+    )
+    ctx.restore()
+
+    // 11. Dessiner un rectangle blanc dans la zone carte avec bords arrondis
+    // Utiliser des valeurs adaptées au canvas 1500x1500px (proportionnelles à la largeur)
+    const cardRadius = Math.round(CARD_ZONE.width * 0.04)  // 4% de la largeur
+
+    ctx.save()
+    createRoundedRectMask(
+      ctx,
+      CARD_ZONE.x,
+      CARD_ZONE.y,
+      CARD_ZONE.width,
+      CARD_ZONE.height,
+      cardRadius
+    )
+    ctx.clip()
+    ctx.fillStyle = '#FFFFFF'
+    ctx.fillRect(
+      CARD_ZONE.x,
+      CARD_ZONE.y,
+      CARD_ZONE.width,
+      CARD_ZONE.height
+    )
+    ctx.restore()
+
+    // 12. Convertir le canvas en Blob
+    return new Promise((resolve, reject) => {
+      finalCanvas.toBlob(
+        (blob) => {
+          if (blob) {
+            console.log('✅ Mockup vidéo généré avec succès (approche template)')
             resolve(blob)
           } else {
             reject(new Error('Impossible de générer le blob du mockup vidéo'))
@@ -457,6 +744,6 @@ export async function generateVideoMockup(videoBlob: Blob): Promise<Blob> {
 
   } catch (error) {
     console.error('Erreur lors de la génération du mockup vidéo:', error)
-    throw error // On ne peut pas fallback sur un blob vidéo comme image
+    throw error
   }
 }

@@ -3,9 +3,9 @@
 // Prix de base HT (avant réduction)
 export const BASE_PRICES_HT = {
   photos: {
-    '10x15': 7.92,  // 9.50€ TTC / 1.20 = 7.92€ HT
-    '20x30': 15.42, // 18.50€ TTC / 1.20 = 15.42€ HT
-    '30x45': 20.42  // 24.50€ TTC / 1.20 = 20.42€ HT
+    '10x15': 12.42,  // 14.90€ TTC / 1.20 = 12.42€ HT
+    '20x30': 24.92,  // 29.90€ TTC / 1.20 = 24.92€ HT
+    '30x45': 33.25   // 39.90€ TTC / 1.20 = 33.25€ HT
   },
   frames: {
     '10x15': 10.75,  // 12.90€ TTC / 1.20 = 10.75€ HT
@@ -18,9 +18,9 @@ export const BASE_PRICES_HT = {
 // Prix TTC (avec TVA 20%)
 export const BASE_PRICES_TTC = {
   photos: {
-    '10x15': 9.50,
-    '20x30': 18.50,
-    '30x45': 24.50
+    '10x15': 14.90,
+    '20x30': 29.90,
+    '30x45': 39.90
   },
   frames: {
     '10x15': 12.90,
@@ -92,20 +92,38 @@ export const SHIPPING_COSTS = {
 export const ITEM_WEIGHTS = {
   photos: {
     '10x15': 5,
-    '20x30': 25,
-    '30x45': 40
+    '20x30': 15,
+    '30x45': 25
+  },
+  envelopes: {
+    '10x15': 3,
+    '20x30': 5,
+    '30x45': 5
+  },
+  pouches: {
+    '10x15': 10,
+    '20x30': 0,
+    '30x45': 15
   },
   nfc: {
     chip: 2,
     label: 1
   },
   frames: {
-    '10x15': 200,
-    '20x30': 500,
-    '30x45': 800,
+    '10x15': 150,
+    '20x30': 300,
+    '30x45': 450,
     multi: 150
   }
 } as const
+
+// Tranches de livraison par poids
+export const SHIPPING_BY_WEIGHT = [
+  { maxWeight: 20, cost: 1.50 },
+  { maxWeight: 250, cost: 5.50 },
+  { maxWeight: 500, cost: 8.50 },
+  { maxWeight: 5000, cost: 14.50 }
+] as const
 
 // Types
 export type PhotoFormat = keyof typeof BASE_PRICES_TTC.photos
@@ -188,33 +206,56 @@ export function calculateOrderPricing(items: CartItemPricing[]): {
   totalWeight: number
   shippingDetails: string
 } {
-  // Étape 1: Appliquer l'offre duo (2ème à -50%)
-  const itemsWithDuo = calculateDuoDiscount(items)
-  
-  // Séparer les prix des photos et des cadres
-  const subtotalPhotosAfterDuo = itemsWithDuo.reduce((sum, item) => {
-    return sum + (item.discountedPrice * item.quantity)
-  }, 0)
-  
-  const subtotalFrames = itemsWithDuo.reduce((sum, item) => {
-    const framePrice = item.withFrame && item.framePrice ? item.framePrice * item.quantity : 0
-    return sum + framePrice
-  }, 0)
-  
-  const subtotalAfterDuo = subtotalPhotosAfterDuo + subtotalFrames
-  
-  // Calculer le prix original (sans réductions)
+  // Calculer la quantité totale et le prix original
+  const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0)
+
   const originalSubtotal = items.reduce((sum, item) => {
     const photoPrice = item.basePrice * item.quantity
     const framePrice = item.withFrame && item.framePrice ? item.framePrice * item.quantity : 0
     return sum + photoPrice + framePrice
   }, 0)
-  
-  // Étape 2: Appliquer le palier de réduction UNIQUEMENT sur les photos (JAMAIS sur les cadres)
-  const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0)
-  const tierDiscountRate = getTierDiscount(totalQuantity)
-  // IMPORTANT: La réduction de palier s'applique UNIQUEMENT sur le prix des photos après Duo
-  const tierDiscountAmount = subtotalPhotosAfterDuo * tierDiscountRate
+
+  // Calculer le subtotal des cadres (jamais réduit)
+  const subtotalFrames = items.reduce((sum, item) => {
+    const framePrice = item.withFrame && item.framePrice ? item.framePrice * item.quantity : 0
+    return sum + framePrice
+  }, 0)
+
+  // Calculer le subtotal des photos (avant réduction)
+  const subtotalPhotosOriginal = items.reduce((sum, item) => {
+    return sum + (item.basePrice * item.quantity)
+  }, 0)
+
+  // NOUVELLE LOGIQUE : Appliquer UNE SEULE offre (non cumulable)
+  let finalItems: CartItemPricing[]
+  let duoDiscountAmount = 0
+  let tierDiscountAmount = 0
+  let subtotalPhotosAfterDiscount = 0
+
+  // Si quantité >= 5 : UNIQUEMENT palier (pas de duo)
+  if (totalQuantity >= 5) {
+    const tierDiscountRate = getTierDiscount(totalQuantity)
+    tierDiscountAmount = subtotalPhotosOriginal * tierDiscountRate
+
+    // Appliquer le palier sur tous les items
+    finalItems = items.map(item => ({
+      ...item,
+      discountedPrice: item.basePrice * (1 - tierDiscountRate)
+    }))
+
+    subtotalPhotosAfterDiscount = subtotalPhotosOriginal - tierDiscountAmount
+  }
+  // Sinon (quantité 2-4) : UNIQUEMENT duo (pas de palier)
+  else {
+    const itemsWithDuo = calculateDuoDiscount(items)
+    finalItems = itemsWithDuo
+
+    subtotalPhotosAfterDiscount = itemsWithDuo.reduce((sum, item) => {
+      return sum + (item.discountedPrice * item.quantity)
+    }, 0)
+
+    duoDiscountAmount = subtotalPhotosOriginal - subtotalPhotosAfterDiscount
+  }
   
   // Étape 3: Calculer les frais de livraison avec les nouvelles règles
   // Compter le nombre total de cadres
@@ -249,21 +290,26 @@ export function calculateOrderPricing(items: CartItemPricing[]): {
   }
   
   // Calculer le total final
-  // Photos avec toutes les réductions + Cadres sans aucune réduction
-  const finalSubtotal = (subtotalPhotosAfterDuo - tierDiscountAmount) + subtotalFrames
-  
-  // Déterminer le palier appliqué
+  // Photos avec réduction appliquée + Cadres sans aucune réduction
+  const finalSubtotal = subtotalPhotosAfterDiscount + subtotalFrames
+
+  // Déterminer le palier appliqué (basé sur quelle réduction a été appliquée)
   let appliedTier = 'Aucun'
-  if (totalQuantity >= 100) appliedTier = '100+ unités (-45%)'
-  else if (totalQuantity >= 50) appliedTier = '50-99 unités (-35%)'
-  else if (totalQuantity >= 10) appliedTier = '10-49 unités (-25%)'
-  else if (totalQuantity >= 5) appliedTier = '5-9 unités (-15%)'
-  else if (totalQuantity === 2) appliedTier = '2 unités (2ème à -50%)'
-  
+  if (totalQuantity >= 5) {
+    // Palier de réduction appliqué
+    if (totalQuantity >= 100) appliedTier = '100+ unités (-45%)'
+    else if (totalQuantity >= 50) appliedTier = '50-99 unités (-35%)'
+    else if (totalQuantity >= 10) appliedTier = '10-49 unités (-25%)'
+    else appliedTier = '5-9 unités (-15%)'
+  } else if (duoDiscountAmount > 0) {
+    // Offre duo appliquée (2-4 photos)
+    appliedTier = '2ème photo à -50%'
+  }
+
   return {
-    items: itemsWithDuo,
+    items: finalItems,
     subtotal: originalSubtotal,
-    duoDiscount: originalSubtotal - subtotalAfterDuo,
+    duoDiscount: duoDiscountAmount,
     tierDiscount: tierDiscountAmount,
     shipping,
     total: finalSubtotal + shipping,
@@ -350,7 +396,7 @@ export function calculateShippingCostByWeight(weightInGrams: number, hasFrames: 
       return SHIPPING_COSTS.parcel.under2kg
     }
   }
-  
+
   // Pour les photos seules (sans cadre)
   if (weightInGrams <= 20) {
     return SHIPPING_COSTS.letter.under20g
@@ -359,5 +405,152 @@ export function calculateShippingCostByWeight(weightInGrams: number, hasFrames: 
   } else {
     // Au-delà de 100g, c'est un colis
     return SHIPPING_COSTS.parcel.under500g
+  }
+}
+
+/**
+ * Interface pour une instance de photo dans le panier
+ */
+export interface PhotoInstance {
+  instanceKey: string
+  id: string
+  format: PhotoFormat
+  withFrame: boolean
+  displayQuantity: number
+}
+
+/**
+ * Interface pour une adresse cadeau
+ */
+export interface GiftAddress {
+  id: string
+  firstName: string
+  lastName: string
+  address: string
+  postalCode: string
+  city: string
+  country: string
+}
+
+/**
+ * Interface pour la distribution des quantités par adresse
+ */
+export interface AddressDistribution {
+  addressId: string | null  // null = "mon adresse"
+  quantity: number
+}
+
+/**
+ * Interface pour les détails de livraison par adresse
+ */
+export interface ShippingByAddressDetail {
+  addressId: string | null
+  addressName: string
+  weight: number
+  cost: number
+}
+
+/**
+ * Calcule le poids d'une photo avec son emballage
+ */
+function calculatePhotoPackageWeight(format: PhotoFormat, withFrame: boolean): number {
+  const photoWeight = ITEM_WEIGHTS.photos[format]
+  const envelopeWeight = ITEM_WEIGHTS.envelopes[format]
+  const nfcWeight = ITEM_WEIGHTS.nfc.chip + ITEM_WEIGHTS.nfc.label
+
+  if (withFrame) {
+    const pouchWeight = ITEM_WEIGHTS.pouches[format]
+    const frameWeight = ITEM_WEIGHTS.frames[format]
+    return photoWeight + envelopeWeight + pouchWeight + frameWeight + nfcWeight
+  } else {
+    return photoWeight + envelopeWeight + nfcWeight
+  }
+}
+
+/**
+ * Détermine le coût de livraison en fonction du poids
+ */
+function getShippingCostForWeight(weight: number): number {
+  for (const tier of SHIPPING_BY_WEIGHT) {
+    if (weight <= tier.maxWeight) {
+      return tier.cost
+    }
+  }
+  // Si le poids dépasse toutes les tranches, retourner le coût maximum
+  return SHIPPING_BY_WEIGHT[SHIPPING_BY_WEIGHT.length - 1].cost
+}
+
+/**
+ * Calcule les frais de livraison par adresse en fonction du poids total de chaque destination
+ * @param photoInstances Liste des instances de photos dans le panier
+ * @param photoAddressDistributions Répartition des quantités par adresse pour chaque instance
+ * @param giftAddresses Liste des adresses cadeaux enregistrées
+ */
+export function calculateShippingByAddress(
+  photoInstances: PhotoInstance[],
+  photoAddressDistributions: Record<string, AddressDistribution[]>,
+  giftAddresses: GiftAddress[]
+): {
+  total: number
+  byAddress: ShippingByAddressDetail[]
+} {
+  // Grouper les poids par adresse
+  const weightByAddress: Record<string, number> = {}
+
+  // Pour chaque instance de photo dans le panier
+  photoInstances.forEach(instance => {
+    const distributions = photoAddressDistributions[instance.instanceKey] || []
+    const packageWeight = calculatePhotoPackageWeight(instance.format, instance.withFrame)
+
+    // Pour chaque distribution de cette instance
+    distributions.forEach(dist => {
+      const addressKey = dist.addressId || 'home'
+      const totalWeight = packageWeight * dist.quantity
+
+      if (!weightByAddress[addressKey]) {
+        weightByAddress[addressKey] = 0
+      }
+      weightByAddress[addressKey] += totalWeight
+    })
+  })
+
+  // Calculer le coût de livraison pour chaque adresse
+  const shippingDetails: ShippingByAddressDetail[] = []
+  let totalShipping = 0
+
+  Object.entries(weightByAddress).forEach(([addressKey, weight]) => {
+    const cost = getShippingCostForWeight(weight)
+
+    let addressName = 'Mon adresse'
+    let addressId: string | null = null
+
+    if (addressKey !== 'home') {
+      const giftAddress = giftAddresses.find(addr => addr.id === addressKey)
+      if (giftAddress) {
+        addressName = `${giftAddress.firstName} ${giftAddress.lastName}`
+        addressId = giftAddress.id
+      }
+    }
+
+    shippingDetails.push({
+      addressId,
+      addressName,
+      weight: Math.round(weight), // Arrondir au gramme près
+      cost
+    })
+
+    totalShipping += cost
+  })
+
+  // Trier : "Mon adresse" en premier, puis par ordre alphabétique
+  shippingDetails.sort((a, b) => {
+    if (a.addressId === null) return -1
+    if (b.addressId === null) return 1
+    return a.addressName.localeCompare(b.addressName)
+  })
+
+  return {
+    total: totalShipping,
+    byAddress: shippingDetails
   }
 }

@@ -3,17 +3,18 @@
 import { useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
 import CommanderWizardNew from './CommanderWizardNew'
+import RevilaLoadingAnimation from '@/components/RevilaLoadingAnimation'
 
 function CommanderContent() {
   const searchParams = useSearchParams()
   const isWeddingPlanSource = searchParams.get('source') === 'weddingplan.fr'
-  
+
   return <CommanderWizardNew isWeddingPlanSource={isWeddingPlanSource} />
 }
 
 export default function Commander() {
   return (
-    <Suspense fallback={<div>Chargement...</div>}>
+    <Suspense fallback={<RevilaLoadingAnimation />}>
       <CommanderContent />
     </Suspense>
   )

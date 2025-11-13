@@ -1,0 +1,129 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - generic [ref=e6]:
+          - button "Revila" [ref=e7]:
+            - heading "Revila" [level=1] [ref=e8]
+            - img [ref=e9]
+          - heading "Choisissez votre format" [level=1] [ref=e14]
+        - button [ref=e16]:
+          - img [ref=e17]
+      - generic [ref=e21]:
+        - generic [ref=e22]:
+          - button "Format" [disabled] [ref=e23]:
+            - img [ref=e24]
+            - generic [ref=e28]: Format
+          - img [ref=e29]
+        - generic [ref=e31]:
+          - button "Upload" [disabled] [ref=e32]:
+            - img [ref=e33]
+            - generic [ref=e36]: Upload
+          - img [ref=e37]
+        - generic [ref=e39]:
+          - button "Ma Galerie" [disabled] [ref=e40]:
+            - img [ref=e41]
+            - generic [ref=e45]: Ma Galerie
+          - img [ref=e46]
+        - generic [ref=e48]:
+          - button "Cadres" [disabled] [ref=e49]:
+            - img [ref=e50]
+            - generic [ref=e53]: Cadres
+          - img [ref=e54]
+        - generic [ref=e56]:
+          - button "Panier" [disabled] [ref=e57]:
+            - img [ref=e58]
+            - generic [ref=e62]: Panier
+          - img [ref=e63]
+        - generic [ref=e65]:
+          - button "Infos" [disabled] [ref=e66]:
+            - img [ref=e67]
+            - generic [ref=e70]: Infos
+          - img [ref=e71]
+        - button "Paiement" [disabled] [ref=e74]:
+          - img [ref=e75]
+          - generic [ref=e77]: Paiement
+    - generic [ref=e79]:
+      - heading "Choisissez votre format" [level=2] [ref=e81]
+      - generic [ref=e83]:
+        - button "15 cm 10 cm Classique 10×15 cm 9.50€" [ref=e84]:
+          - generic [ref=e86]:
+            - generic [ref=e89]: 15 cm
+            - generic [ref=e91]: 10 cm
+          - generic [ref=e92]:
+            - heading "Classique" [level=4] [ref=e93]
+            - paragraph [ref=e94]: 10×15 cm
+            - paragraph [ref=e96]: 9.50€
+        - button "30 cm 20 cm Moyen 20×30 cm 18.50€" [ref=e97]:
+          - generic [ref=e99]:
+            - generic [ref=e102]: 30 cm
+            - generic [ref=e104]: 20 cm
+          - generic [ref=e105]:
+            - heading "Moyen" [level=4] [ref=e106]
+            - paragraph [ref=e107]: 20×30 cm
+            - paragraph [ref=e109]: 18.50€
+        - button "45 cm 30 cm Grand 30×45 cm 24.50€" [ref=e110]:
+          - generic [ref=e112]:
+            - generic [ref=e115]: 45 cm
+            - generic [ref=e117]: 30 cm
+          - generic [ref=e118]:
+            - heading "Grand" [level=4] [ref=e119]
+            - paragraph [ref=e120]: 30×45 cm
+            - paragraph [ref=e122]: 24.50€
+      - generic [ref=e123]:
+        - generic [ref=e124]:
+          - heading "Besoin d'inspiration ?" [level=3] [ref=e125]
+          - paragraph [ref=e126]: Découvrez nos modèles gratuits
+        - generic [ref=e127]:
+          - link "Modèle mariage 1 Modèle mariage 2 Modèle mariage 3 Modèle mariage 4 Modèle mariage 5 Modèle mariage 6 Modèle mariage 7 Mariage Cliquez pour découvrir nos modèles" [ref=e128] [cursor=pointer]:
+            - /url: /modele-mariage
+            - generic [ref=e129] [cursor=pointer]:
+              - generic [ref=e130] [cursor=pointer]:
+                - generic [ref=e131] [cursor=pointer]:
+                  - img "Modèle mariage 1" [ref=e133] [cursor=pointer]
+                  - img "Modèle mariage 2" [ref=e135] [cursor=pointer]
+                  - img "Modèle mariage 3" [ref=e137] [cursor=pointer]
+                  - img "Modèle mariage 4" [ref=e139] [cursor=pointer]
+                  - img "Modèle mariage 5" [ref=e141] [cursor=pointer]
+                  - img "Modèle mariage 6" [ref=e143] [cursor=pointer]
+                  - img "Modèle mariage 7" [ref=e145] [cursor=pointer]
+                - img [ref=e148] [cursor=pointer]
+              - generic [ref=e151] [cursor=pointer]:
+                - heading "Mariage" [level=4] [ref=e152] [cursor=pointer]
+                - paragraph [ref=e153] [cursor=pointer]: Cliquez pour découvrir nos modèles
+          - link "Modèle naissance 1 Modèle naissance 2 Modèle naissance 3 Modèle naissance 4 Modèle naissance 5 Naissance Cliquez pour découvrir nos modèles" [ref=e154] [cursor=pointer]:
+            - /url: /modele-naissance
+            - generic [ref=e155] [cursor=pointer]:
+              - generic [ref=e156] [cursor=pointer]:
+                - generic [ref=e157] [cursor=pointer]:
+                  - img "Modèle naissance 1" [ref=e159] [cursor=pointer]
+                  - img "Modèle naissance 2" [ref=e161] [cursor=pointer]
+                  - img "Modèle naissance 3" [ref=e163] [cursor=pointer]
+                  - img "Modèle naissance 4" [ref=e165] [cursor=pointer]
+                  - img "Modèle naissance 5" [ref=e167] [cursor=pointer]
+                - img [ref=e170] [cursor=pointer]
+              - generic [ref=e173] [cursor=pointer]:
+                - heading "Naissance" [level=4] [ref=e174] [cursor=pointer]
+                - paragraph [ref=e175] [cursor=pointer]: Cliquez pour découvrir nos modèles
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e181] [cursor=pointer]:
+    - img [ref=e182] [cursor=pointer]
+  - alert [ref=e185]
+  - generic [ref=e188]:
+    - generic [ref=e189]:
+      - img [ref=e191]
+      - generic [ref=e193]:
+        - heading "🍪 Nous utilisons des cookies" [level=3] [ref=e194]
+        - paragraph [ref=e195]: Pour améliorer votre expérience et analyser l'utilisation de notre site. Vous pouvez personnaliser vos préférences à tout moment.
+    - generic [ref=e196]:
+      - button "Refuser" [ref=e197]
+      - button "Personnaliser" [ref=e198]:
+        - img [ref=e199]
+        - text: Personnaliser
+      - button "Accepter tout" [ref=e202]:
+        - img [ref=e203]
+        - text: Accepter tout
+```

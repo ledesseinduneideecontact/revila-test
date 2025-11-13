@@ -42,6 +42,12 @@ export default function PhotoCropper({ imageSrc, onCropComplete, onCancel, initi
 
   // Ratio selon le format choisi
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>(initialConfig?.orientation || initialOrientation)
+
+  console.log('📸 PhotoCropper initialized with:', {
+    initialOrientation,
+    'initialConfig?.orientation': initialConfig?.orientation,
+    'final orientation': orientation
+  })
   // Format carré = ratio 1:1, autres formats = ratio 1:1.5 (10x15, 20x30, 30x45)
   const PHOTO_ASPECT_RATIO = format === 'carre' ? 1 : (orientation === 'portrait' ? 1 / 1.5 : 1.5 / 1)
 

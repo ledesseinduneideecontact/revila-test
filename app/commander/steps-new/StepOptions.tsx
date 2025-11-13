@@ -1,22 +1,19 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Plus, Minus, Frame, X } from 'lucide-react'
+import { Plus, Minus, ShoppingBag, ShoppingCart, ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import Image from 'next/image'
 import type { CartFormat } from '../CommanderWizardNew'
-import {
-  generateFrameMockup,
-  createMockupPreviewUrl,
-  revokeMockupPreviewUrl,
-  type FrameFormat,
-  type PhotoOrientation
-} from '@/lib/mockup-generator'
+import { generateFrameMockup, revokeFrameMockupURL } from '@/lib/frameMockupGenerator'
 
 interface StepOptionsProps {
   cart: CartFormat[]
   onUpdateFrames: (frames: FrameSelection) => void
   onNext: () => void
+  onAddFormat?: () => void
+  onBack?: () => void  // Retour vers Ma Galerie
+  initialFrameSelections?: Record<string, number>  // Sélections existantes pour persistance
+  onUpdatePhotoFrames?: (selections: Record<string, number>) => void  // Callback pour sauvegarder
 }
 
 export interface FrameSelection {
@@ -25,495 +22,341 @@ export interface FrameSelection {
   '30x45': number
 }
 
+interface PhotoWithFrameMockup {
+  photoId: string
+  format: string
+  frameMockupUrl: string | null
+  isLoading: boolean
+}
+
+// Prix des cadres par format
 const FRAME_PRICES = {
   '10x15': 12.90,
   '20x30': 16.90,
   '30x45': 19.90
 }
 
-export default function StepOptions({ cart, onUpdateFrames, onNext }: StepOptionsProps) {
-  const [frameQuantities, setFrameQuantities] = useState<FrameSelection>({
-    '10x15': 0,
-    '20x30': 0,
-    '30x45': 0
-  })
+export default function StepOptions({ cart, onNext, onAddFormat, onBack, onUpdateFrames, initialFrameSelections, onUpdatePhotoFrames }: StepOptionsProps) {
+  const [frameMockups, setFrameMockups] = useState<PhotoWithFrameMockup[]>([])
+  const [isGenerating, setIsGenerating] = useState(true)
+  // État pour le nombre de cadres sélectionnés par photo (initialisé depuis props pour persistance)
+  const [frameSelections, setFrameSelections] = useState<Record<string, number>>(initialFrameSelections || {})
 
-  // State for generated mockup previews
-  const [mockupPreviews, setMockupPreviews] = useState<{
-    '10x15': string | null
-    '20x30': string | null
-    '30x45': string | null
-  }>({
-    '10x15': null,
-    '20x30': null,
-    '30x45': null
-  })
+  // Sauvegarder les sélections de cadres à chaque changement
+  useEffect(() => {
+    if (onUpdatePhotoFrames) {
+      onUpdatePhotoFrames(frameSelections)
+    }
+  }, [frameSelections, onUpdatePhotoFrames])
 
-  // Loading states per format
-  const [mockupLoading, setMockupLoading] = useState<{
-    '10x15': boolean
-    '20x30': boolean
-    '30x45': boolean
-  }>({
-    '10x15': false,
-    '20x30': false,
-    '30x45': false
-  })
+  // Générer les mockups de cadres pour toutes les photos du panier
+  useEffect(() => {
+    const generateAllMockups = async () => {
+      setIsGenerating(true)
+      const mockups: PhotoWithFrameMockup[] = []
 
-  // Error states per format
-  const [mockupErrors, setMockupErrors] = useState<{
-    '10x15': string | null
-    '20x30': string | null
-    '30x45': string | null
-  }>({
-    '10x15': null,
-    '20x30': null,
-    '30x45': null
-  })
+      for (const cartFormat of cart) {
+        for (const photo of cartFormat.photos) {
+          // Déterminer l'orientation de la photo
+          const orientation = (photo as any).cropConfig?.orientation || 'portrait'
 
-  // Calculer le nombre de photos par format
-  const photosByFormat = cart.reduce((acc, format) => {
-    const totalPhotos = format.photos.reduce((sum, photo) => sum + photo.quantity, 0)
-    acc[format.format] = (acc[format.format] || 0) + totalPhotos
+          try {
+            // Générer le mockup de cadre
+            const mockupUrl = await generateFrameMockup(
+              photo.photoPreview,
+              cartFormat.format as '10x15' | '20x30' | '30x45',
+              orientation
+            )
+
+            mockups.push({
+              photoId: photo.id,
+              format: cartFormat.format,
+              frameMockupUrl: mockupUrl,
+              isLoading: false
+            })
+          } catch (error) {
+            console.error(`Erreur lors de la génération du mockup pour photo ${photo.id}:`, error)
+            mockups.push({
+              photoId: photo.id,
+              format: cartFormat.format,
+              frameMockupUrl: null,
+              isLoading: false
+            })
+          }
+        }
+      }
+
+      setFrameMockups(mockups)
+      setIsGenerating(false)
+    }
+
+    generateAllMockups()
+
+    // Cleanup: nettoyer les Blob URLs lors du démontage du composant
+    return () => {
+      frameMockups.forEach(mockup => {
+        if (mockup.frameMockupUrl) {
+          revokeFrameMockupURL(mockup.frameMockupUrl)
+        }
+      })
+    }
+  }, [cart])
+
+  // Regrouper les mockups par format
+  const mockupsByFormat = frameMockups.reduce((acc, mockup) => {
+    if (!acc[mockup.format]) {
+      acc[mockup.format] = []
+    }
+    acc[mockup.format].push(mockup)
     return acc
-  }, {} as Record<string, number>)
-
-  /**
-   * Retrieves the first photo for a given format from the cart
-   * Prefers photos with photoFile (cropped), falls back to originalPhotoFile
-   */
-  const getFirstPhotoForFormat = (format: FrameFormat): {
-    blob: Blob | null
-    orientation: PhotoOrientation
-  } | null => {
-    // Find the cart entry for this format
-    const cartEntry = cart.find(item => item.format === format)
-
-    if (!cartEntry || cartEntry.photos.length === 0) {
-      return null
-    }
-
-    // Get the first photo
-    const firstPhoto = cartEntry.photos[0]
-
-    // Prefer cropped photo, fallback to original
-    const photoBlob = firstPhoto.photoFile || firstPhoto.originalPhotoFile
-
-    if (!photoBlob) {
-      return null
-    }
-
-    // Determine orientation from cropConfig, default to portrait
-    const orientation: PhotoOrientation =
-      firstPhoto.cropConfig?.orientation === 'landscape' ? 'landscape' : 'portrait'
-
-    return {
-      blob: photoBlob,
-      orientation
-    }
-  }
-
-  const updateQuantity = (format: keyof FrameSelection, delta: number) => {
-    setFrameQuantities(prev => ({
-      ...prev,
-      [format]: Math.max(0, prev[format] + delta)
-    }))
-  }
-
-  /**
-   * Generate mockups when component mounts or cart changes
-   * Creates preview for first photo of each format in cart
-   */
-  useEffect(() => {
-    const formats: FrameFormat[] = ['10x15', '20x30', '30x45']
-
-    // Generate mockups for each format that has photos
-    formats.forEach(async (format) => {
-      // Skip if format has no photos
-      if (!photosByFormat[format]) {
-        return
-      }
-
-      // Skip if already generated successfully
-      if (mockupPreviews[format]) {
-        return
-      }
-
-      // Get first photo for this format
-      const photoData = getFirstPhotoForFormat(format)
-
-      if (!photoData) {
-        console.warn(`No photo available for format ${format}`)
-        return
-      }
-
-      // Set loading state
-      setMockupLoading(prev => ({ ...prev, [format]: true }))
-      setMockupErrors(prev => ({ ...prev, [format]: null }))
-
-      try {
-        // Generate the mockup
-        const mockupBlob = await generateFrameMockup(
-          photoData.blob,
-          format,
-          photoData.orientation
-        )
-
-        // Create preview URL
-        const previewUrl = createMockupPreviewUrl(mockupBlob)
-
-        // Update state
-        setMockupPreviews(prev => ({ ...prev, [format]: previewUrl }))
-
-        console.log(`✅ Mockup generated for ${format}`)
-      } catch (error) {
-        console.error(`Error generating mockup for ${format}:`, error)
-        setMockupErrors(prev => ({
-          ...prev,
-          [format]: 'Impossible de générer l\'aperçu'
-        }))
-      } finally {
-        setMockupLoading(prev => ({ ...prev, [format]: false }))
-      }
-    })
-
-    // Cleanup function: revoke blob URLs when component unmounts or cart changes
-    return () => {
-      Object.values(mockupPreviews).forEach(url => {
-        if (url) {
-          revokeMockupPreviewUrl(url)
-        }
-      })
-    }
-  }, [cart, photosByFormat])
-
-  /**
-   * Cleanup blob URLs when component unmounts
-   */
-  useEffect(() => {
-    return () => {
-      // Revoke all preview URLs to free memory
-      Object.values(mockupPreviews).forEach(url => {
-        if (url) {
-          revokeMockupPreviewUrl(url)
-        }
-      })
-    }
-  }, [])
-
-  const calculateTotal = () => {
-    return Object.entries(frameQuantities).reduce((total, [format, quantity]) => {
-      const price = FRAME_PRICES[format as keyof typeof FRAME_PRICES] || 0
-      return total + (price * quantity)
-    }, 0)
-  }
-
-  const handleContinue = () => {
-    onUpdateFrames(frameQuantities)
-    onNext()
-  }
+  }, {} as Record<string, PhotoWithFrameMockup[]>)
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      {/* Sélection des cadres par format */}
-      <div className="space-y-6">
-        <h3 className="text-xl font-semibold text-center">Sublimez vos photos avec un cadre</h3>
+    <div className="max-w-6xl mx-auto space-y-6">
+      {/* Bouton retour */}
+      {onBack && (
+        <button
+          onClick={onBack}
+          className="flex items-center gap-2 text-gray-600 hover:text-orange-600 transition-colors"
+        >
+          <ArrowLeft className="w-5 h-5" />
+          <span className="font-medium">Retour à ma galerie</span>
+        </button>
+      )}
 
-        {/* Grille des formats avec cadres */}
-        <div className="w-[90vw] md:w-full mx-auto grid md:grid-cols-3 gap-6">
-          {/* Format 10x15 */}
-          {photosByFormat['10x15'] && (
-            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-              <div className="aspect-square bg-gray-100 relative">
-                {/* Show loading state */}
-                {mockupLoading['10x15'] && (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
-                  </div>
-                )}
-
-                {/* Show error state with fallback to static image */}
-                {mockupErrors['10x15'] && !mockupLoading['10x15'] && (
-                  <img
-                    src="/images/cadre-10x15-new.png"
-                    alt="Cadre 10×15 cm"
-                    className="w-full h-full object-cover"
-                  />
-                )}
-
-                {/* Show generated mockup */}
-                {!mockupLoading['10x15'] && !mockupErrors['10x15'] && mockupPreviews['10x15'] ? (
-                  <img
-                    src={mockupPreviews['10x15']}
-                    alt="Aperçu de votre photo encadrée 10×15 cm"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  // Fallback to static image while generating
-                  !mockupLoading['10x15'] && (
-                    <img
-                      src="/images/cadre-10x15-new.png"
-                      alt="Cadre 10×15 cm"
-                      className="w-full h-full object-cover"
-                    />
-                  )
-                )}
-
-                {/* Status badge */}
-                <div className="absolute bottom-2 right-2 bg-black/70 text-white px-2 py-1 rounded text-xs">
-                  {mockupPreviews['10x15'] ? 'Votre photo' : 'Image exemple'}
-                </div>
-
-                {/* Format label */}
-                <div className="absolute top-3 left-3 bg-white/90 px-2 py-1 rounded">
-                  <span className="text-sm font-semibold">10×15 cm</span>
-                </div>
-
-                {/* Error indicator (optional) */}
-                {mockupErrors['10x15'] && (
-                  <div className="absolute top-3 right-3 bg-red-500 text-white px-2 py-1 rounded text-xs">
-                    Aperçu indisponible
-                  </div>
-                )}
-              </div>
-              
-              <div className="p-4 space-y-3">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-orange-600">12.90€</div>
-                </div>
-                
-                <ul className="text-xs text-gray-600 space-y-1">
-                  <li>✓ Cadre noir, sobre et élégant</li>
-                  <li>✓ Vitre protectrice</li>
-                  <li>✓ S'accroche ou se pose facilement</li>
-                </ul>
-                
-                <div className="border-t pt-3">
-                  <div className="text-sm text-gray-600 text-center mb-2">
-                    {photosByFormat['10x15']} photo(s) disponible(s)
-                  </div>
-                  <div className="flex items-center justify-center gap-3">
-                    <button
-                      onClick={() => updateQuantity('10x15', -1)}
-                      disabled={frameQuantities['10x15'] === 0}
-                      className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Minus className="w-5 h-5" />
-                    </button>
-                    <span className="w-12 text-center text-xl font-bold">
-                      {frameQuantities['10x15']}
-                    </span>
-                    <button
-                      onClick={() => updateQuantity('10x15', 1)}
-                      className="w-10 h-10 rounded-full bg-orange-500 hover:bg-orange-600 text-white flex items-center justify-center"
-                    >
-                      <Plus className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Format 20x30 */}
-          {photosByFormat['20x30'] && (
-            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-              <div className="aspect-square bg-gray-100 relative">
-                {/* Show loading state */}
-                {mockupLoading['20x30'] && (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
-                  </div>
-                )}
-
-                {/* Show error state with fallback to static image */}
-                {mockupErrors['20x30'] && !mockupLoading['20x30'] && (
-                  <img
-                    src="/images/cadre-20x30.png"
-                    alt="Cadre 20×30 cm"
-                    className="w-full h-full object-cover"
-                  />
-                )}
-
-                {/* Show generated mockup */}
-                {!mockupLoading['20x30'] && !mockupErrors['20x30'] && mockupPreviews['20x30'] ? (
-                  <img
-                    src={mockupPreviews['20x30']}
-                    alt="Aperçu de votre photo encadrée 20×30 cm"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  // Fallback to static image while generating
-                  !mockupLoading['20x30'] && (
-                    <img
-                      src="/images/cadre-20x30.png"
-                      alt="Cadre 20×30 cm"
-                      className="w-full h-full object-cover"
-                    />
-                  )
-                )}
-
-                {/* Status badge */}
-                <div className="absolute bottom-2 right-2 bg-black/70 text-white px-2 py-1 rounded text-xs">
-                  {mockupPreviews['20x30'] ? 'Votre photo' : 'Image exemple'}
-                </div>
-
-                {/* Format label */}
-                <div className="absolute top-3 left-3 bg-white/90 px-2 py-1 rounded">
-                  <span className="text-sm font-semibold">20×30 cm</span>
-                </div>
-
-                {/* Error indicator (optional) */}
-                {mockupErrors['20x30'] && (
-                  <div className="absolute top-3 right-3 bg-red-500 text-white px-2 py-1 rounded text-xs">
-                    Aperçu indisponible
-                  </div>
-                )}
-              </div>
-              
-              <div className="p-4 space-y-3">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-orange-600">16.90€</div>
-                </div>
-                
-                <ul className="text-xs text-gray-600 space-y-1">
-                  <li>✓ Cadre noir, sobre et élégant</li>
-                  <li>✓ Vitre protectrice</li>
-                  <li>✓ S'accroche ou se pose facilement</li>
-                </ul>
-                
-                <div className="border-t pt-3">
-                  <div className="text-sm text-gray-600 text-center mb-2">
-                    {photosByFormat['20x30']} photo(s) disponible(s)
-                  </div>
-                  <div className="flex items-center justify-center gap-3">
-                    <button
-                      onClick={() => updateQuantity('20x30', -1)}
-                      disabled={frameQuantities['20x30'] === 0}
-                      className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Minus className="w-5 h-5" />
-                    </button>
-                    <span className="w-12 text-center text-xl font-bold">
-                      {frameQuantities['20x30']}
-                    </span>
-                    <button
-                      onClick={() => updateQuantity('20x30', 1)}
-                      className="w-10 h-10 rounded-full bg-orange-500 hover:bg-orange-600 text-white flex items-center justify-center"
-                    >
-                      <Plus className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Format 30x45 */}
-          {photosByFormat['30x45'] && (
-            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-              <div className="aspect-square bg-gray-100 relative">
-                {/* Show loading state */}
-                {mockupLoading['30x45'] && (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
-                  </div>
-                )}
-
-                {/* Show error state with fallback to static image */}
-                {mockupErrors['30x45'] && !mockupLoading['30x45'] && (
-                  <img
-                    src="/images/cadre-30x45.png"
-                    alt="Cadre 30×45 cm"
-                    className="w-full h-full object-cover"
-                  />
-                )}
-
-                {/* Show generated mockup */}
-                {!mockupLoading['30x45'] && !mockupErrors['30x45'] && mockupPreviews['30x45'] ? (
-                  <img
-                    src={mockupPreviews['30x45']}
-                    alt="Aperçu de votre photo encadrée 30×45 cm"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  // Fallback to static image while generating
-                  !mockupLoading['30x45'] && (
-                    <img
-                      src="/images/cadre-30x45.png"
-                      alt="Cadre 30×45 cm"
-                      className="w-full h-full object-cover"
-                    />
-                  )
-                )}
-
-                {/* Status badge */}
-                <div className="absolute bottom-2 right-2 bg-black/70 text-white px-2 py-1 rounded text-xs">
-                  {mockupPreviews['30x45'] ? 'Votre photo' : 'Image exemple'}
-                </div>
-
-                {/* Format label */}
-                <div className="absolute top-3 left-3 bg-white/90 px-2 py-1 rounded">
-                  <span className="text-sm font-semibold">30×45 cm</span>
-                </div>
-
-                {/* Error indicator (optional) */}
-                {mockupErrors['30x45'] && (
-                  <div className="absolute top-3 right-3 bg-red-500 text-white px-2 py-1 rounded text-xs">
-                    Aperçu indisponible
-                  </div>
-                )}
-              </div>
-              
-              <div className="p-4 space-y-3">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-orange-600">19.90€</div>
-                </div>
-                
-                <ul className="text-xs text-gray-600 space-y-1">
-                  <li>✓ Cadre noir, sobre et élégant</li>
-                  <li>✓ Vitre protectrice</li>
-                  <li>✓ S'accroche ou se pose facilement</li>
-                </ul>
-                
-                <div className="border-t pt-3">
-                  <div className="text-sm text-gray-600 text-center mb-2">
-                    {photosByFormat['30x45']} photo(s) disponible(s)
-                  </div>
-                  <div className="flex items-center justify-center gap-3">
-                    <button
-                      onClick={() => updateQuantity('30x45', -1)}
-                      disabled={frameQuantities['30x45'] === 0}
-                      className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Minus className="w-5 h-5" />
-                    </button>
-                    <span className="w-12 text-center text-xl font-bold">
-                      {frameQuantities['30x45']}
-                    </span>
-                    <button
-                      onClick={() => updateQuantity('30x45', 1)}
-                      className="w-10 h-10 rounded-full bg-orange-500 hover:bg-orange-600 text-white flex items-center justify-center"
-                    >
-                      <Plus className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+      {/* Titre */}
+      <div className="text-center">
+        <h2 className="text-2xl md:text-3xl font-bold text-gray-900">
+          Aperçu de vos photos encadrées
+        </h2>
+        <p className="text-gray-600 mt-2">
+          Découvrez le rendu de vos photos magiques dans leurs cadres
+        </p>
       </div>
 
+      {/* État de chargement */}
+      {isGenerating && (
+        <div className="text-center py-12">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+          <p className="mt-4 text-gray-600">Génération des aperçus de cadres...</p>
+        </div>
+      )}
 
-      {/* Bouton continuer */}
-      <div className="flex justify-center">
-        <Button
-          onClick={handleContinue}
-          className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-3 text-lg"
-        >
-          Continuer vers le panier
-        </Button>
+      {/* Galerie des mockups par format */}
+      {!isGenerating && (
+        <div className="space-y-8">
+          {Object.entries(mockupsByFormat).map(([format, mockups]) => (
+            <div key={format} className="space-y-4">
+              {/* En-tête du format */}
+              <div className="border-b pb-2">
+                <div className="flex items-baseline justify-between">
+                  <h3 className="text-xl font-semibold text-gray-800">
+                    Format {format.replace('x', '×')} cm
+                  </h3>
+                  <span className="text-sm text-orange-600 font-medium">
+                    {FRAME_PRICES[format as keyof typeof FRAME_PRICES]?.toFixed(2)}€/cadre
+                  </span>
+                </div>
+              </div>
+
+              {/* Grille des photos encadrées */}
+              <div className="w-[90vw] md:w-full mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {mockups.map((mockup) => {
+                  // Trouver la photo correspondante dans le panier
+                  const photo = cart
+                    .flatMap(cf => cf.photos)
+                    .find(p => p.id === mockup.photoId)
+
+                  return (
+                    <div key={mockup.photoId} className="bg-white rounded-xl shadow-lg overflow-hidden">
+                      {/* Aperçu du mockup de cadre */}
+                      <div className="aspect-square bg-gray-100 flex items-center justify-center overflow-hidden">
+                        {mockup.isLoading && (
+                          <div className="text-center">
+                            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+                            <p className="text-sm text-gray-500 mt-2">Chargement...</p>
+                          </div>
+                        )}
+                        {!mockup.isLoading && mockup.frameMockupUrl && (
+                          <img
+                            src={mockup.frameMockupUrl}
+                            alt="Photo encadrée"
+                            className={
+                              mockup.format === '10x15'
+                                ? 'w-full h-full object-cover'
+                                : 'max-w-full max-h-full object-contain'
+                            }
+                          />
+                        )}
+                        {!mockup.isLoading && !mockup.frameMockupUrl && (
+                          <div className="text-center p-4">
+                            <p className="text-sm text-red-500">Erreur de génération</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Informations sur la photo */}
+                      <div className="p-4 space-y-3">
+                        {photo?.message && (
+                          <div className="text-xs text-gray-600 italic">
+                            "{photo.message}"
+                            {photo.signature && <span className="block mt-1">- {photo.signature}</span>}
+                          </div>
+                        )}
+
+                        {/* Sélecteur de cadres */}
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-center gap-3">
+                            <button
+                              onClick={() => {
+                                const currentSelection = frameSelections[mockup.photoId] || 0
+                                if (currentSelection > 0) {
+                                  setFrameSelections(prev => ({
+                                    ...prev,
+                                    [mockup.photoId]: currentSelection - 1
+                                  }))
+                                }
+                              }}
+                              disabled={(frameSelections[mockup.photoId] || 0) === 0}
+                              className="w-10 h-10 rounded-full border-2 border-gray-300 hover:border-orange-500 hover:bg-orange-50 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-gray-300 disabled:hover:bg-transparent transition-colors"
+                            >
+                              <Minus className="w-5 h-5 text-gray-700" />
+                            </button>
+
+                            <div className="min-w-[80px] text-center">
+                              <div className="text-2xl font-bold text-gray-900">
+                                {frameSelections[mockup.photoId] || 0}/{photo?.quantity || 1}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                cadre{((frameSelections[mockup.photoId] || 0) > 1) ? 's' : ''}
+                              </div>
+                            </div>
+
+                            <button
+                              onClick={() => {
+                                const currentSelection = frameSelections[mockup.photoId] || 0
+                                const maxQuantity = photo?.quantity || 1
+                                if (currentSelection < maxQuantity) {
+                                  setFrameSelections(prev => ({
+                                    ...prev,
+                                    [mockup.photoId]: currentSelection + 1
+                                  }))
+                                }
+                              }}
+                              disabled={(frameSelections[mockup.photoId] || 0) >= (photo?.quantity || 1)}
+                              className="w-10 h-10 rounded-full bg-orange-500 hover:bg-orange-600 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-orange-500 transition-colors"
+                            >
+                              <Plus className="w-5 h-5 text-white" />
+                            </button>
+                          </div>
+
+                          {/* Badge de confirmation */}
+                          {(frameSelections[mockup.photoId] || 0) > 0 && (
+                            <div className="text-center">
+                              <span className="inline-flex items-center gap-1 px-3 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">
+                                ✓ {frameSelections[mockup.photoId]} cadre{frameSelections[mockup.photoId] > 1 ? 's' : ''} ajouté{frameSelections[mockup.photoId] > 1 ? 's' : ''}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Que souhaitez-vous faire ? */}
+      <div className="max-w-2xl mx-auto mt-8">
+        <div className="bg-white rounded-xl shadow-lg p-8">
+          <h2 className="text-2xl font-bold text-center mb-8">
+            Que souhaitez-vous faire ?
+          </h2>
+
+          <div className="grid md:grid-cols-2 gap-6">
+            {/* Option 1: Continuer les achats */}
+            <button
+              onClick={() => {
+                // Sauvegarder les sélections de cadres avant de retourner
+                const frameTotals: FrameSelection = {
+                  '10x15': 0,
+                  '20x30': 0,
+                  '30x45': 0
+                }
+
+                Object.entries(frameSelections).forEach(([photoId, quantity]) => {
+                  const mockup = frameMockups.find(m => m.photoId === photoId)
+                  if (mockup && quantity > 0) {
+                    const format = mockup.format as keyof FrameSelection
+                    frameTotals[format] += quantity
+                  }
+                })
+
+                onUpdateFrames(frameTotals)
+
+                // Retourner à la sélection des formats
+                if (onAddFormat) onAddFormat()
+              }}
+              className="group bg-white border-2 border-gray-200 rounded-xl p-6 hover:border-orange-400 hover:shadow-lg transition-all"
+            >
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center group-hover:bg-orange-200 transition-colors">
+                  <ShoppingBag className="w-10 h-10 text-orange-600" />
+                </div>
+                <h3 className="text-lg font-semibold">Ajouter d'autres formats</h3>
+                <p className="text-sm text-gray-600 text-center">
+                  Continuez vos achats et ajoutez d'autres photos avec des formats différents
+                </p>
+              </div>
+            </button>
+
+            {/* Option 2: Valider le panier */}
+            <button
+              onClick={() => {
+                // Calculer le total de cadres par format
+                const frameTotals: FrameSelection = {
+                  '10x15': 0,
+                  '20x30': 0,
+                  '30x45': 0
+                }
+
+                Object.entries(frameSelections).forEach(([photoId, quantity]) => {
+                  const mockup = frameMockups.find(m => m.photoId === photoId)
+                  if (mockup && quantity > 0) {
+                    const format = mockup.format as keyof FrameSelection
+                    frameTotals[format] += quantity
+                  }
+                })
+
+                onUpdateFrames(frameTotals)
+
+                // Passer à l'étape suivante
+                onNext()
+              }}
+              disabled={isGenerating}
+              className="group bg-white border-2 border-gray-200 rounded-xl p-6 hover:border-green-400 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                  <ShoppingCart className="w-10 h-10 text-green-600" />
+                </div>
+                <h3 className="text-lg font-semibold">Finaliser ma sélection</h3>
+                <p className="text-sm text-gray-600 text-center">
+                  Finalisez la sélection de vos Revilas et passez aux options
+                </p>
+              </div>
+            </button>
+          </div>
+
+          <div className="mt-8 text-center">
+            <p className="text-sm text-gray-500">
+              💡 Vous pourrez toujours modifier votre panier avant le paiement
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   )

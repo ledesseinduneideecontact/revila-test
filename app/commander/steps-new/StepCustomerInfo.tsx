@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { User, Mail, Phone, MapPin, ArrowLeft, ExternalLink } from 'lucide-react'
+import { User, Mail, Phone, MapPin, ArrowLeft, ExternalLink, Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 interface CustomerInfo {
@@ -25,6 +25,7 @@ export default function StepCustomerInfo({ customerInfo, onComplete, onBack }: S
   const [errors, setErrors] = useState<Partial<CustomerInfo>>({})
   const [cgvAccepted, setCgvAccepted] = useState(false)
   const [cgvError, setCgvError] = useState('')
+  const [showCountryInfo, setShowCountryInfo] = useState(false)
 
   const handleChange = (field: keyof CustomerInfo, value: string) => {
     setFormData({ ...formData, [field]: value })
@@ -217,6 +218,53 @@ export default function StepCustomerInfo({ customerInfo, onComplete, onBack }: S
             {errors.city && (
               <p className="text-red-500 text-xs mt-1">{errors.city}</p>
             )}
+          </div>
+        </div>
+
+        {/* Pays */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Pays *
+          </label>
+          <div className="relative">
+            <input
+              type="text"
+              value="FRANCE"
+              disabled
+              className="w-full p-3 border rounded-lg bg-gray-50 text-gray-700 cursor-not-allowed border-gray-300"
+            />
+            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+              <div
+                className="relative"
+                onMouseEnter={() => setShowCountryInfo(true)}
+                onMouseLeave={() => setShowCountryInfo(false)}
+              >
+                <button
+                  type="button"
+                  onClick={() => setShowCountryInfo(!showCountryInfo)}
+                  className="text-orange-500 hover:text-orange-600 transition-colors"
+                >
+                  <Info className="w-5 h-5" />
+                </button>
+                {showCountryInfo && (
+                  <div className="absolute right-0 bottom-full mb-2 w-80 bg-white border-2 border-gray-300 text-gray-800 text-sm rounded-lg p-4 shadow-2xl z-50">
+                    <div className="absolute bottom-0 right-6 transform translate-y-1/2 rotate-45 w-3 h-3 bg-white border-r-2 border-b-2 border-gray-300"></div>
+                    <p className="mb-2 font-medium">
+                      Nous livrons par défaut en France métropolitaine.
+                    </p>
+                    <p className="text-gray-600">
+                      Pour une livraison à l'international, merci de nous contacter par email à{' '}
+                      <a
+                        href="mailto:contact@revila.fr"
+                        className="text-orange-600 hover:text-orange-700 underline font-medium"
+                      >
+                        contact@revila.fr
+                      </a>
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 

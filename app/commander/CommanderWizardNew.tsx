@@ -1,25 +1,27 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { ChevronLeft, ChevronRight, ShoppingCart, Package, Camera, Image, Sparkles, User, CreditCard, CheckCircle, Settings, Home } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { ChevronLeft, ChevronRight, ShoppingCart, Package, Camera, Image, User, CreditCard, CheckCircle, Settings, Home } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import StepFormat from './steps-new/StepFormat'
 import StepUpload from './steps-new/StepUpload'
 import StepGallery from './steps-new/StepGallery'
-import StepContinueOrCheckout from './steps-new/StepContinueOrCheckout'
 import StepOptions from './steps-new/StepOptions'
 import CartSummary from './steps-new/CartSummary'
 import StepCustomerInfo from './steps-new/StepCustomerInfo'
 import StepPayment from './steps-new/StepPayment'
 import type { FrameSelection } from './steps-new/StepOptions'
 import { toast } from 'sonner'
-import { calculateOrderPricing, CartItemPricing, PhotoFormat, calculateShippingCost, getPhotoPrice } from '@/lib/pricing'
+import { calculateOrderPricing, CartItemPricing, PhotoFormat, calculateShippingCost, getPhotoPrice, calculateShippingByAddress, type PhotoInstance as PricingPhotoInstance } from '@/lib/pricing'
+import RevilaLoadingAnimation from '@/components/RevilaLoadingAnimation'
+import type { GiftAddress, AddressDistribution } from '@/types'
 
 export interface PhotoItem {
   id: string
   format: 'carre' | '10x15' | '20x30' | '30x45'
   withFrame: boolean  // Maintenant géré individuellement par photo
+  frameQuantity?: number  // Nombre de cadres commandés pour cette photo spécifique
   photoFile?: File  // Photo recadrée finale
   originalPhotoFile?: File  // Photo originale non recadrée
   cropConfig?: any  // Configuration de recadrage (zoom, rotation, position, orientation)
@@ -50,8 +52,7 @@ const STEPS = [
   { id: 1, title: 'Format', icon: Package, description: 'Choisissez la taille' },
   { id: 2, title: 'Upload', icon: Camera, description: 'Ajoutez vos médias' },
   { id: 3, title: 'Ma Galerie', icon: Image, description: 'Gérez vos photos' },
-  { id: 4, title: 'Continuer', icon: Sparkles, description: 'Continuer ou payer' },
-  { id: 5, title: 'Options', icon: Settings, description: 'Choisir les cadres' },
+  { id: 4, title: 'Cadres', icon: Settings, description: 'Choisir les cadres' },
   { id: 6, title: 'Panier', icon: ShoppingCart, description: 'Récapitulatif' },
   { id: 7, title: 'Infos', icon: User, description: 'Vos coordonnées' },
   { id: 8, title: 'Paiement', icon: CreditCard, description: 'Finalisez' }
@@ -63,6 +64,7 @@ interface CommanderWizardNewProps {
 
 export default function CommanderWizardNew({ isWeddingPlanSource = false }: CommanderWizardNewProps) {
   const router = useRouter()
+  const [isInitialLoading, setIsInitialLoading] = useState(true)
   const [currentStep, setCurrentStep] = useState(1)
   const [cart, setCart] = useState<CartFormat[]>([])
   const [currentFormat, setCurrentFormat] = useState<'carre' | '10x15' | '20x30' | '30x45' | null>(null)
@@ -75,6 +77,8 @@ export default function CommanderWizardNew({ isWeddingPlanSource = false }: Comm
     '20x30': 0,
     '30x45': 0
   })
+  // Sélections de cadres par photo (pour la persistance)
+  const [photoFrameSelections, setPhotoFrameSelections] = useState<Record<string, number>>({})
   const [customerInfo, setCustomerInfo] = useState({
     firstName: '',
     lastName: '',
@@ -86,6 +90,11 @@ export default function CommanderWizardNew({ isWeddingPlanSource = false }: Comm
   })
   const [promoCode, setPromoCode] = useState('')
   const [promoDiscount, setPromoDiscount] = useState(0)
+  const [giftAddresses, setGiftAddresses] = useState<GiftAddress[]>([])
+  const [photoAddressDistributions, setPhotoAddressDistributions] = useState<Record<string, AddressDistribution[]>>({})
+
+  // Déterminer si des photos ont été uploadées
+  const hasUploadedPhotos = cart.length > 0 || currentPhotos.length > 0
 
   // Scroll en haut de la page à chaque changement d'onglet
   useEffect(() => {
@@ -118,7 +127,9 @@ export default function CommanderWizardNew({ isWeddingPlanSource = false }: Comm
     // Sinon charger depuis sessionStorage comme avant
     const savedCart = sessionStorage.getItem('cart')
     const savedCustomerInfo = sessionStorage.getItem('customerInfo')
-    
+    const savedGiftAddresses = sessionStorage.getItem('giftAddresses')
+    const savedPhotoAddressDistributions = sessionStorage.getItem('photoAddressDistributions')
+
     // Note: Les fichiers File ne peuvent pas être stockés dans sessionStorage
     // On ne sauvegarde que les métadonnées
     if (savedCart) {
@@ -139,6 +150,8 @@ export default function CommanderWizardNew({ isWeddingPlanSource = false }: Comm
       }
     }
     if (savedCustomerInfo) setCustomerInfo(JSON.parse(savedCustomerInfo))
+    if (savedGiftAddresses) setGiftAddresses(JSON.parse(savedGiftAddresses))
+    if (savedPhotoAddressDistributions) setPhotoAddressDistributions(JSON.parse(savedPhotoAddressDistributions))
   }, [])
 
 
@@ -160,6 +173,42 @@ export default function CommanderWizardNew({ isWeddingPlanSource = false }: Comm
     sessionStorage.setItem('customerInfo', JSON.stringify(customerInfo))
   }, [customerInfo])
 
+  useEffect(() => {
+    sessionStorage.setItem('giftAddresses', JSON.stringify(giftAddresses))
+  }, [giftAddresses])
+
+  useEffect(() => {
+    sessionStorage.setItem('photoAddressDistributions', JSON.stringify(photoAddressDistributions))
+  }, [photoAddressDistributions])
+
+  // Avertissement lors de la tentative de rechargement/fermeture de la page
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUploadedPhotos) {
+        e.preventDefault()
+        // Pour les navigateurs modernes
+        e.returnValue = ''
+        // Message personnalisé (certains navigateurs l'ignorent)
+        return 'Si vous quittez maintenant, votre commande en cours sera perdue et vous devrez recommencer.'
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [hasUploadedPhotos])
+
+  // Ensure minimum loading time to show animation
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsInitialLoading(false)
+    }, 2500) // 2.5 seconds to allow full animation cycle
+
+    return () => clearTimeout(timer)
+  }, [])
+
   const handleFormatSelect = (format: 'carre' | '10x15' | '20x30' | '30x45') => {
     // Maintenant on ne gère plus withFrame au niveau du format
     setCurrentFormat(format)
@@ -167,14 +216,58 @@ export default function CommanderWizardNew({ isWeddingPlanSource = false }: Comm
     setCurrentStep(2)
   }
 
+  // Ajouter une photo directement au panier
+  const addPhotoDirectlyToCart = (photo: PhotoItem) => {
+    if (!currentFormat) return
+
+    // Préparer la photo (sans cadre par défaut)
+    const photoWithDefaults = { ...photo, withFrame: false }
+
+    // Chercher si un CartFormat existe déjà pour ce format et statut de cadre
+    const existingCartFormatIndex = cart.findIndex(
+      c => c.format === currentFormat && c.withFrame === false
+    )
+
+    if (existingCartFormatIndex !== -1) {
+      // Ajouter au CartFormat existant
+      const updatedCart = [...cart]
+      updatedCart[existingCartFormatIndex] = {
+        ...updatedCart[existingCartFormatIndex],
+        photos: [...updatedCart[existingCartFormatIndex].photos, photoWithDefaults]
+      }
+      setCart(updatedCart)
+    } else {
+      // Créer un nouveau CartFormat
+      const newCartFormat: CartFormat = {
+        format: currentFormat,
+        withFrame: false,
+        photos: [photoWithDefaults]
+      }
+      setCart([...cart, newCartFormat])
+    }
+  }
+
+  // Mettre à jour uniquement le message d'une photo dans le panier
+  const updatePhotoMessage = (photoId: string, message: string, signature: string) => {
+    const updatedCart = cart.map(cartFormat => ({
+      ...cartFormat,
+      photos: cartFormat.photos.map(photo =>
+        photo.id === photoId
+          ? { ...photo, message, signature }
+          : photo
+      )
+    }))
+    setCart(updatedCart)
+  }
+
   const handlePhotoUpload = (photo: PhotoItem) => {
     if (editingPhotoId) {
       // Si on édite une photo, la remplacer en conservant certaines propriétés
       const updatedPhotos = currentPhotos.map(p => {
         if (p.id === editingPhotoId) {
-          return { 
-            ...photo, 
-            id: editingPhotoId, 
+          return {
+            ...photo,
+            id: editingPhotoId,
             withFrame: p.withFrame, // Conserver le statut de cadre
             quantity: p.quantity, // Conserver la quantité
             originalPhotoFile: photo.originalPhotoFile || p.originalPhotoFile, // Assurer qu'on conserve l'original
@@ -186,10 +279,8 @@ export default function CommanderWizardNew({ isWeddingPlanSource = false }: Comm
       setCurrentPhotos(updatedPhotos)
       setEditingPhotoId(null)
     } else {
-      // Ajouter la nouvelle photo aux photos existantes au lieu de remplacer
-      // Par défaut, les photos n'ont pas de cadre
-      const photoWithFrame = { ...photo, withFrame: false }
-      setCurrentPhotos([...currentPhotos, photoWithFrame])
+      // NOUVEAU COMPORTEMENT : Ajouter directement au panier
+      addPhotoDirectlyToCart(photo)
     }
     setCurrentStep(3)
   }
@@ -199,8 +290,13 @@ export default function CommanderWizardNew({ isWeddingPlanSource = false }: Comm
   }
 
   const handleEditPhoto = (photoId: string) => {
-    // Trouver la photo à éditer
-    const photoToEdit = currentPhotos.find(p => p.id === photoId)
+    // Trouver la photo à éditer dans le panier
+    let photoToEdit: PhotoItem | undefined
+    for (const cartFormat of cart) {
+      photoToEdit = cartFormat.photos.find(p => p.id === photoId)
+      if (photoToEdit) break
+    }
+
     if (photoToEdit) {
       setEditingPhotoId(photoId)
       setCurrentStep(2) // Aller à l'étape Upload
@@ -266,9 +362,9 @@ export default function CommanderWizardNew({ isWeddingPlanSource = false }: Comm
 
   const handleProceedToCheckout = () => {
     handleAddToCart()
-    // Réinitialiser l'état d'édition avant d'aller aux options
+    // Réinitialiser l'état d'édition avant d'aller au panier
     setEditingFormatIndex(null)
-    setCurrentStep(5) // Aller aux Options
+    setCurrentStep(6) // Aller au Panier
   }
 
   const handleEditFormat = (formatIndex: number) => {
@@ -300,8 +396,84 @@ export default function CommanderWizardNew({ isWeddingPlanSource = false }: Comm
     }))
   }
 
+  const handleUpdatePhotoQuantity = (
+    formatIndex: number,
+    photoId: string,
+    delta: number,
+    isFramed: boolean
+  ) => {
+    setCart(prevCart => {
+      const newCart = prevCart.map((format, idx) => {
+        if (idx === formatIndex) {
+          return {
+            ...format,
+            photos: format.photos.filter(photo => {
+              if (photo.id === photoId) {
+                if (isFramed) {
+                  // Mise à jour de la quantité avec cadre
+                  const newFrameQty = Math.max(0, (photo.frameQuantity || 0) + delta)
+                  photo.frameQuantity = newFrameQty
+                  // Si quantité totale = 0, supprimer la photo
+                  return photo.quantity - newFrameQty > 0 || newFrameQty > 0
+                } else {
+                  // Mise à jour de la quantité totale
+                  const newTotalQty = Math.max(0, photo.quantity + delta)
+                  if (newTotalQty === 0) return false // Supprimer si quantité = 0
+                  photo.quantity = newTotalQty
+                  // Ajuster frameQuantity si nécessaire
+                  if (photo.frameQuantity && photo.frameQuantity > newTotalQty) {
+                    photo.frameQuantity = newTotalQty
+                  }
+                  return true
+                }
+              }
+              return true
+            }).map(photo => ({ ...photo })) // Créer de nouvelles instances
+          }
+        }
+        return format
+      }).filter(format => format.photos.length > 0) // Supprimer les formats vides
+
+      return newCart
+    })
+  }
+
   const handleOptionsComplete = () => {
-    setCurrentStep(6) // Aller au panier
+    setCurrentStep(6) // Aller directement au panier
+  }
+
+  // Gestion des adresses cadeaux
+  const handleAddGiftAddress = (address: Omit<GiftAddress, 'id'>) => {
+    const newAddress: GiftAddress = {
+      ...address,
+      id: `gift-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    }
+    setGiftAddresses(prev => [...prev, newAddress])
+  }
+
+  const handleEditGiftAddress = (id: string, address: Omit<GiftAddress, 'id'>) => {
+    setGiftAddresses(prev =>
+      prev.map(addr => addr.id === id ? { ...address, id } : addr)
+    )
+  }
+
+  const handleDeleteGiftAddress = (id: string) => {
+    setGiftAddresses(prev => prev.filter(addr => addr.id !== id))
+    // Supprimer aussi toutes les distributions pour cette adresse
+    setPhotoAddressDistributions(prev => {
+      const updated = { ...prev }
+      Object.keys(updated).forEach(photoId => {
+        updated[photoId] = updated[photoId].filter(dist => dist.addressId !== id)
+      })
+      return updated
+    })
+  }
+
+  const handlePhotoAddressDistribution = (photoId: string, distributions: AddressDistribution[]) => {
+    setPhotoAddressDistributions(prev => ({
+      ...prev,
+      [photoId]: distributions
+    }))
   }
 
 
@@ -346,16 +518,45 @@ export default function CommanderWizardNew({ isWeddingPlanSource = false }: Comm
       })
     }
     
-    // Compter aussi les cadres du panier
-    const cartFrameCount = items.filter(item => item.withFrame).reduce((sum, item) => sum + item.quantity, 0)
-    totalFrameCount += cartFrameCount
-    
-    // Vérifier s'il y a une photo 30x45
-    const hasLargePhoto = cart.some(format => format.format === '30x45')
-    
-    // Recalculer la livraison avec le bon nombre de cadres
-    const correctShipping = calculateShippingCost(totalFrameCount, hasLargePhoto)
-    
+    // Préparer les instances de photos pour le calcul de livraison
+    const photoInstances: PricingPhotoInstance[] = []
+    cart.forEach(format => {
+      format.photos.forEach(photo => {
+        const frameQuantity = photo.frameQuantity || 0
+        const noFrameQuantity = photo.quantity - frameQuantity
+
+        // Créer une instance pour les versions avec cadres (si > 0)
+        if (frameQuantity > 0) {
+          photoInstances.push({
+            instanceKey: `${photo.id}-framed`,
+            id: photo.id,
+            format: format.format as PhotoFormat,
+            withFrame: true,
+            displayQuantity: frameQuantity
+          })
+        }
+
+        // Créer une instance pour les versions sans cadres (si > 0)
+        if (noFrameQuantity > 0) {
+          photoInstances.push({
+            instanceKey: `${photo.id}-noframe`,
+            id: photo.id,
+            format: format.format as PhotoFormat,
+            withFrame: false,
+            displayQuantity: noFrameQuantity
+          })
+        }
+      })
+    })
+
+    // Calculer la livraison par adresse en fonction du poids
+    const shippingData = calculateShippingByAddress(
+      photoInstances,
+      photoAddressDistributions,
+      giftAddresses
+    )
+    const correctShipping = shippingData.total
+
     // Retourner le total avec la bonne livraison et la réduction promo
     return (pricingData.total - pricingData.shipping) + correctShipping + framesTotal - promoDiscount
   }
@@ -370,8 +571,7 @@ export default function CommanderWizardNew({ isWeddingPlanSource = false }: Comm
       case 1: return "Choisissez votre format"
       case 2: return "Ajoutez votre photo"
       case 3: return "Personnalisez votre commande"
-      case 4: return "Que souhaitez-vous faire ?"
-      case 5: return "Choisir les options"
+      case 4: return "Choisir les options"
       case 6: return "Votre panier"
       case 7: return "Vos informations"
       case 8: return "Paiement"
@@ -380,13 +580,9 @@ export default function CommanderWizardNew({ isWeddingPlanSource = false }: Comm
   }
 
   // Empêcher le retour depuis Ma Galerie (3) vers Upload (2)
-  // Empêcher le retour depuis Continuer (4) vers Ma Galerie (3)
-  // Empêcher le retour depuis Options (5) vers Continuer (4)
+  // Empêcher le retour depuis Options (4) vers Ma Galerie (3)
   // Garder l'interdiction existante pour Panier (6), Infos (7) et Paiement (8)
-  const canGoBack = currentStep > 1 && currentStep !== 3 && currentStep !== 4 && currentStep !== 5 && currentStep !== 6 && currentStep !== 7 && currentStep !== 8
-
-  // Vérifier si l'utilisateur a déjà uploadé des photos
-  const hasUploadedPhotos = cart.length > 0 || currentPhotos.length > 0
+  const canGoBack = currentStep > 1 && currentStep !== 3 && currentStep !== 4 && currentStep !== 6 && currentStep !== 7 && currentStep !== 8
 
   const handleHomeClick = () => {
     if (hasUploadedPhotos) {
@@ -401,8 +597,26 @@ export default function CommanderWizardNew({ isWeddingPlanSource = false }: Comm
     router.push('/')
   }
 
+  // Fonction mémorisée pour mettre à jour les sélections de cadres par photo
+  const handleUpdatePhotoFrames = useCallback((selections: Record<string, number>) => {
+    setPhotoFrameSelections(selections)
+    // Mettre à jour frameQuantity dans chaque photo du cart en utilisant la forme fonctionnelle
+    setCart(prevCart => prevCart.map(cartFormat => ({
+      ...cartFormat,
+      photos: cartFormat.photos.map(photo => ({
+        ...photo,
+        frameQuantity: selections[photo.id] || 0
+      }))
+    })))
+  }, [])
+
+  // Show loading screen while initializing
+  if (isInitialLoading) {
+    return <RevilaLoadingAnimation />
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-page-background">
       {/* Popup de confirmation */}
       {showExitConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -493,7 +707,7 @@ export default function CommanderWizardNew({ isWeddingPlanSource = false }: Comm
                 <ShoppingCart className="w-6 h-6" />
                 {cart.length > 0 && (
                   <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                    {cart.reduce((acc, format) => acc + format.photos.length, 0)}
+                    {cart.reduce((acc, format) => acc + format.photos.reduce((sum, photo) => sum + photo.quantity, 0), 0)}
                   </span>
                 )}
               </button>
@@ -558,34 +772,57 @@ export default function CommanderWizardNew({ isWeddingPlanSource = false }: Comm
           />
         )}
         
-        {currentStep === 3 && (
-          <StepGallery
-            photos={currentPhotos}
-            format={currentFormat || '10x15'}
-            cart={cart}
-            editingFormatIndex={editingFormatIndex}
-            onUpdate={handleGalleryUpdate}
-            onNext={() => setCurrentStep(4)}
-            onAddPhoto={() => setCurrentStep(2)}
-            onEditPhoto={handleEditPhoto}
-          />
-        )}
+        {currentStep === 3 && (() => {
+          // Extraire les photos du panier pour le format actuel
+          const photosForCurrentFormat = cart
+            .filter(cartFormat => cartFormat.format === currentFormat)
+            .flatMap(cartFormat => cartFormat.photos)
+
+          return (
+            <StepGallery
+              photos={photosForCurrentFormat}
+              format={currentFormat || '10x15'}
+              cart={cart}
+              editingFormatIndex={editingFormatIndex}
+              onUpdate={(updatedPhotos) => {
+                // Mettre à jour les photos dans le panier pour ce format
+                const updatedCart = cart.map(cartFormat => {
+                  if (cartFormat.format === currentFormat) {
+                    return {
+                      ...cartFormat,
+                      photos: updatedPhotos
+                    }
+                  }
+                  return cartFormat
+                })
+                setCart(updatedCart)
+              }}
+              onNext={() => setCurrentStep(4)}
+              onAddPhoto={() => setCurrentStep(2)}
+              onEditPhoto={handleEditPhoto}
+              onUpdateMessage={updatePhotoMessage}
+            />
+          )
+        })()}
         
         {currentStep === 4 && (
-          <StepContinueOrCheckout
-            onContinue={handleContinueShopping}
-            onCheckout={handleProceedToCheckout}
-          />
-        )}
-        
-        {currentStep === 5 && (
           <StepOptions
             cart={cart}
             onUpdateFrames={handleUpdateFrames}
             onNext={handleOptionsComplete}
+            onAddFormat={() => {
+              // Réinitialiser l'état pour ajouter un nouveau format
+              setCurrentFormat(null)
+              setCurrentPhotos([])
+              setEditingFormatIndex(null)
+              setCurrentStep(1)
+            }}
+            onBack={() => setCurrentStep(3)}
+            initialFrameSelections={photoFrameSelections}
+            onUpdatePhotoFrames={handleUpdatePhotoFrames}
           />
         )}
-        
+
         {currentStep === 6 && (
           <CartSummary
             cart={cart}
@@ -600,12 +837,19 @@ export default function CommanderWizardNew({ isWeddingPlanSource = false }: Comm
               setCurrentStep(1)
             }}
             onEditFormat={handleEditFormat}
-            onEditFrames={() => setCurrentStep(5)}
+            onEditFrames={() => setCurrentStep(4)}
             onUpdateFrameQuantity={handleUpdateFrameQuantity}
+            onUpdatePhotoQuantity={handleUpdatePhotoQuantity}
             promoCode={promoCode}
             promoDiscount={promoDiscount}
             onPromoCodeChange={handlePromoCodeChange}
             isWeddingPlanSource={isWeddingPlanSource}
+            giftAddresses={giftAddresses}
+            photoAddressDistributions={photoAddressDistributions}
+            onAddGiftAddress={handleAddGiftAddress}
+            onEditGiftAddress={handleEditGiftAddress}
+            onDeleteGiftAddress={handleDeleteGiftAddress}
+            onPhotoAddressDistribution={handlePhotoAddressDistribution}
           />
         )}
         

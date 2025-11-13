@@ -10,6 +10,7 @@ export default function Home() {
   const [faqSectionOpen, setFaqSectionOpen] = useState(false)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const uploadVideoRef = useRef<HTMLVideoElement | null>(null)
+  const heroVideoRef = useRef<HTMLVideoElement | null>(null)
   const [isMobile, setIsMobile] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
@@ -31,6 +32,21 @@ export default function Home() {
       uploadVideoRef.current.playbackRate = 2.0
     }
   }, [])
+
+  // Auto-play hero video after 1 second delay
+  useEffect(() => {
+    if (!isMobile && heroVideoRef.current) {
+      const timer = setTimeout(() => {
+        if (heroVideoRef.current) {
+          heroVideoRef.current.play().catch((error) => {
+            console.error('Erreur lors de la lecture de la vidéo hero:', error)
+          })
+        }
+      }, 1000)
+
+      return () => clearTimeout(timer)
+    }
+  }, [isMobile])
 
   const faqItems = [
     {
@@ -173,31 +189,71 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Bandeau supérieur avec image de fond */}
-      <section 
-        className="relative bg-white flex items-center justify-center"
-        style={{ height: '100vh' }}
+      {/* Bandeau supérieur avec image et vidéo incrustée */}
+      <section
+        className="relative bg-white flex items-center justify-center w-full overflow-hidden"
+        style={{ height: '100vh', width: '100vw', margin: 0, padding: 0 }}
       >
         {/* Image de fond responsive - clickable sur mobile */}
-        <img
-          src={isMobile ? "/frontend-pictures/hero-mobile-new.jpg" : "/frontend-pictures/openart-a8532219d9da42fd8ce13437a13dec1a_raw.jpg"}
-          alt="REVILA - Photos magiques"
-          className={isMobile ? "object-cover w-full h-full cursor-pointer" : "object-cover w-[100vw] h-screen"}
-          onClick={isMobile ? () => {
-            const section = document.querySelector('section.py-16.px-4.bg-gradient-to-b');
-            section?.scrollIntoView({ behavior: 'smooth' });
-          } : undefined}
-        />
+        {isMobile ? (
+          <video
+            key="mobile-video-portrait"
+            loop
+            muted
+            playsInline
+            autoPlay
+            className="absolute top-0 left-0 cursor-pointer"
+            style={{ objectFit: 'cover', width: '100vw', height: '100vh' }}
+            onClick={() => {
+              const section = document.querySelector('section.py-16.px-4.bg-gradient-to-b');
+              section?.scrollIntoView({ behavior: 'smooth' });
+            }}
+          >
+            <source src="/frontend-pictures/main-video-portrait.mp4" type="video/mp4" />
+          </video>
+        ) : (
+          <video
+            key="desktop-video-paysage"
+            ref={heroVideoRef}
+            loop
+            muted
+            playsInline
+            autoPlay
+            className="absolute top-0 left-0"
+            style={{ objectFit: 'cover', width: '100vw', height: '100vh' }}
+          >
+            <source src="/frontend-pictures/main-video-background.mp4" type="video/mp4" />
+          </video>
+        )}
       </section>
 
       {/* Section explicative Revila */}
       <section id="principe" className="py-8 md:py-16 px-4 bg-gradient-to-b from-white to-gray-50">
-        <div className="container mx-auto max-w-4xl text-center">
-          <img 
-            src={isMobile ? "/frontend-pictures/decouvrir-revila-mobile.png" : "/frontend-pictures/Simple Lined Watercolor Art Mockup Facebook Post (3).png"}
-            alt="Qu'est-ce que Revila ?"
-            className="w-full h-auto rounded-lg shadow-lg"
-          />
+        <div className="container mx-auto max-w-6xl">
+          {/* Layout avec texte à gauche et vidéo à droite */}
+          <div className="flex flex-col md:flex-row items-center gap-8 md:gap-12 rounded-xl overflow-hidden" style={{backgroundColor: '#C4B4A2'}}>
+            {/* Texte à gauche */}
+            <div className="flex-1 flex flex-col justify-center text-center p-6 md:p-8">
+              <h2 className="text-4xl md:text-5xl font-bold text-white mb-6" style={{fontFamily: 'Cormorant, serif'}}>
+                C'est une Revila.
+              </h2>
+              <p className="text-xl md:text-2xl text-white" style={{fontFamily: 'Cormorant, serif'}}>
+                La première impression vidéo au monde !
+              </p>
+            </div>
+
+            {/* Vidéo à droite */}
+            <div className="flex-1 w-full">
+              <video
+                autoPlay
+                loop
+                muted
+                playsInline
+                src="/frontend-pictures/video-presentation-effet-revila-eau.mov"
+                className="w-full h-auto"
+              />
+            </div>
+          </div>
           {/* Vidéo déplacée ici sur mobile uniquement */}
           {isMobile && (
             <div className="mt-12">
@@ -216,6 +272,53 @@ export default function Home() {
               </video>
             </div>
           )}
+        </div>
+      </section>
+
+      {/* Section Avantages - Sans App, Sans QR code, Invisible */}
+      <section className="py-12 md:py-16 bg-gradient-to-b from-white to-gray-50">
+        <div className="container mx-auto px-4">
+          <div className="max-w-6xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
+
+              {/* Sans Application */}
+              <div className="flex flex-col items-center text-center p-6 bg-white rounded-xl shadow-md">
+                <img
+                  src="/frontend-pictures/sans-app-icone.png"
+                  alt="Sans Application"
+                  className="w-16 h-16 md:w-20 md:h-20 mb-4"
+                />
+                <p className="text-lg md:text-xl font-semibold" style={{fontFamily: 'Boston Angel, serif', color: '#806947'}}>
+                  Sans Application
+                </p>
+              </div>
+
+              {/* Sans QR code */}
+              <div className="flex flex-col items-center text-center p-6 bg-white rounded-xl shadow-md">
+                <img
+                  src="/frontend-pictures/sans-qr-code-icone.png"
+                  alt="Sans QR code"
+                  className="w-16 h-16 md:w-20 md:h-20 mb-4"
+                />
+                <p className="text-lg md:text-xl font-semibold" style={{fontFamily: 'Boston Angel, serif', color: '#806947'}}>
+                  Sans QR code
+                </p>
+              </div>
+
+              {/* Invisible */}
+              <div className="flex flex-col items-center text-center p-6 bg-white rounded-xl shadow-md">
+                <img
+                  src="/frontend-pictures/invisible-icone.png"
+                  alt="Invisible"
+                  className="w-16 h-16 md:w-20 md:h-20 mb-4"
+                />
+                <p className="text-lg md:text-xl font-semibold" style={{fontFamily: 'Boston Angel, serif', color: '#806947'}}>
+                  Invisible
+                </p>
+              </div>
+
+            </div>
+          </div>
         </div>
       </section>
 
@@ -578,7 +681,7 @@ export default function Home() {
             
             {/* Contenu central - prend toute la largeur sur mobile */}
             <div className="text-center py-8 md:py-12 flex-1">
-              <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-2" style={{fontFamily: 'Boston Angel, serif'}}>REVILA</h2>
+              <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-2" style={{fontFamily: 'Boston Angel, serif'}}>REVILA®</h2>
               <p className="text-sm md:text-base text-gray-600 mb-4">Photos magiques qui prennent vie</p>
               <Link href="/mentions-legales" className="text-xs md:text-sm text-gray-500 hover:text-gray-700 underline">
                 Mentions légales

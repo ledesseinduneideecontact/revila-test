@@ -90,6 +90,23 @@ export interface CartItem {
   withFrame?: boolean
 }
 
+// Interface pour les adresses cadeaux (utilisée dans le panier)
+export interface GiftAddress {
+  id: string
+  firstName: string
+  lastName: string
+  address: string
+  postalCode: string
+  city: string
+  country: string
+}
+
+// Interface pour la distribution des quantités par adresse
+export interface AddressDistribution {
+  addressId: string | null  // null = "chez moi"
+  quantity: number
+}
+
 export const PRICING = {
   photos: {
     1: 9.50,

@@ -180,11 +180,11 @@ export default function StepFormat({ onSelect }: StepFormatProps) {
                     </div>
                   ) : (
                     // Style normal pour les autres formats
-                    <div 
+                    <div
                       className="bg-gray-200 shadow-sm transition-transform group-hover:scale-105"
                       style={{
-                        width: `${Math.min(format.width * 3, 120)}px`,
-                        height: `${Math.min(format.height * 3, 80)}px`,
+                        width: `${Math.min(format.width * 4, 150)}px`,
+                        height: `${Math.min(format.height * 4, 100)}px`,
                         backgroundImage: 'url(/image-montagne.webp)',
                         backgroundSize: 'cover',
                         backgroundPosition: 'center'
@@ -231,7 +231,7 @@ export default function StepFormat({ onSelect }: StepFormatProps) {
       <div className="mt-12 space-y-6">
         <div className="text-center">
           <h3 className="text-xl font-bold mb-2">Besoin d'inspiration ?</h3>
-          <p className="text-gray-600">Découvrez nos modèles de faire-part</p>
+          <p className="text-gray-600">Découvrez nos modèles gratuits</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -271,7 +271,7 @@ export default function StepFormat({ onSelect }: StepFormatProps) {
                 </div>
               </div>
               <div className="p-4 bg-gradient-to-b from-white to-pink-50">
-                <h4 className="font-semibold text-gray-900 text-center">Modèles de faire-part de mariage</h4>
+                <h4 className="font-semibold text-gray-900 text-center">Mariage</h4>
                 <p className="text-sm text-gray-600 text-center mt-1">Cliquez pour découvrir nos modèles</p>
               </div>
             </div>
@@ -313,7 +313,7 @@ export default function StepFormat({ onSelect }: StepFormatProps) {
                 </div>
               </div>
               <div className="p-4 bg-gradient-to-b from-white to-blue-50">
-                <h4 className="font-semibold text-gray-900 text-center">Modèles de faire-part de naissance</h4>
+                <h4 className="font-semibold text-gray-900 text-center">Naissance</h4>
                 <p className="text-sm text-gray-600 text-center mt-1">Cliquez pour découvrir nos modèles</p>
               </div>
             </div>

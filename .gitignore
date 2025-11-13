@@ -101,3 +101,11 @@ jspm_packages/
 .vscode-test 
 
 
+nul
+mockup-message-personnalisé
+mockup-phone-card
+
+# Google Cloud credentials
+key-revila.json
+*-key.json
+service-account*.json
