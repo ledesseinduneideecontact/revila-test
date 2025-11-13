@@ -265,6 +265,7 @@ export default function StepUpload({ format, onComplete, editingPhoto }: StepUpl
     mediaFiles: Array<{ id: string; file: File; type: 'photo' | 'video'; preview: string; duration?: number; orientation?: 'portrait' | 'landscape' }>
     musicTrackId: string | null
     format: 'portrait' | 'landscape'
+    customMusicFile?: File
   }) => {
     setShowMontageWizard(false)
     setMontageCreating(true)
