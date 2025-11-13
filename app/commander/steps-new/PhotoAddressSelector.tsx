@@ -44,7 +44,7 @@ export default function PhotoAddressSelector({
     ? `${selectedAddress.firstName} ${selectedAddress.lastName}`
     : 'Livré chez moi'
 
-  const displayIcon = selectedAddress ? MapPin : Home
+  const DisplayIcon = selectedAddress ? MapPin : Home
 
   const handleSelect = (addressId: string | null) => {
     onSelect(addressId)
@@ -75,7 +75,7 @@ export default function PhotoAddressSelector({
         }`}
         title={disabled ? 'Aucune adresse cadeau disponible' : 'Changer l\'adresse de livraison'}
       >
-        {displayIcon && <displayIcon className="w-3.5 h-3.5 flex-shrink-0" />}
+        {DisplayIcon && <DisplayIcon className="w-3.5 h-3.5 flex-shrink-0" />}
         <span className="truncate max-w-[120px]">{displayText}</span>
         {!disabled && availableAddresses.length > 0 && (
           <ChevronDown className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
