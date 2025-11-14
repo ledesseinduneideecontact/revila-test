@@ -4,7 +4,7 @@ services:
   # Application Next.js
   app:
     build:
-      context: ./revelo-main
+      context: .
       dockerfile: Dockerfile
       args:
         - NODE_ENV=production
@@ -22,6 +22,9 @@ services:
       - ./uploads:/app/uploads
       # Logs
       - ./logs:/app/.next/standalone/logs
+      # Fichiers temporaires pour le traitement vidéo
+      - ./tmp:/app/tmp
+      - ./outputs:/app/outputs
     networks:
       - revila-network
     depends_on:
