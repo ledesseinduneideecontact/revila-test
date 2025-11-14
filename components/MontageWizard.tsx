@@ -21,6 +21,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { MUSIC_LIBRARY, getMusicsByCategory, MUSIC_CATEGORIES } from '@/lib/music-library'
+import { generateUUID } from '@/lib/uuid'
 
 interface MediaFile {
   id: string
@@ -155,7 +156,7 @@ export default function MontageWizard({
     // Ajouter la vidéo initiale si fournie
     if (initialVideoFile) {
       return [{
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         file: initialVideoFile,
         type: 'video',
         preview: URL.createObjectURL(initialVideoFile),
@@ -260,7 +261,7 @@ export default function MontageWizard({
       }
 
       newMediaFiles.push({
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         file,
         type: fileType,
         preview,
