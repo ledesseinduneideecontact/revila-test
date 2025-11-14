@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  output: 'standalone',
   // Désactiver la génération statique des pages d'erreur
   generateBuildId: async () => {
     return 'build-' + Date.now()

@@ -1,6 +1,9 @@
 # Build stage
 FROM node:18-alpine AS builder
 
+# Install FFmpeg for video processing
+RUN apk add --no-cache ffmpeg wget
+
 # Set working directory
 WORKDIR /app
 
@@ -39,6 +42,9 @@ RUN npm run build
 
 # Production stage
 FROM node:18-alpine AS runner
+
+# Install FFmpeg for video processing and wget for health checks
+RUN apk add --no-cache ffmpeg wget
 
 # Create app user
 RUN addgroup --system --gid 1001 nodejs

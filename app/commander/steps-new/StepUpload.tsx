@@ -567,8 +567,8 @@ export default function StepUpload({ format, onComplete, editingPhoto }: StepUpl
         height: `${height}%`,
         borderRadius: `clamp(15px, ${borderRadiusPx * 0.1}vw, ${borderRadiusPx}px)`,
         transform: 'translateZ(0)',
-        isolation: 'isolate',
-        backfaceVisibility: 'hidden'
+        isolation: 'isolate' as const,
+        backfaceVisibility: 'hidden' as const
       }
     }
 
@@ -585,8 +585,8 @@ export default function StepUpload({ format, onComplete, editingPhoto }: StepUpl
       height: `${height}%`,
       borderRadius: `clamp(15px, ${borderRadiusPx * 0.1}vw, ${borderRadiusPx}px)`,
       transform: 'translateZ(0)',
-      isolation: 'isolate',
-      backfaceVisibility: 'hidden'
+      isolation: 'isolate' as const,
+      backfaceVisibility: 'hidden' as const
     }
   }
 
@@ -630,8 +630,8 @@ export default function StepUpload({ format, onComplete, editingPhoto }: StepUpl
       height: `${height}%`,
       borderRadius,
       transform: 'translateZ(0)',
-      isolation: 'isolate',
-      backfaceVisibility: 'hidden'
+      isolation: 'isolate' as const,
+      backfaceVisibility: 'hidden' as const
     }
   }
 
@@ -673,8 +673,8 @@ export default function StepUpload({ format, onComplete, editingPhoto }: StepUpl
       height: `${height}%`,
       borderRadius: `clamp(15px, ${borderRadiusPx * 0.1}vw, ${borderRadiusPx}px)`,
       transform: 'translateZ(0)',
-      isolation: 'isolate',
-      backfaceVisibility: 'hidden'
+      isolation: 'isolate' as const,
+      backfaceVisibility: 'hidden' as const
     }
   }
 
@@ -773,6 +773,7 @@ export default function StepUpload({ format, onComplete, editingPhoto }: StepUpl
       photoPreview: croppedPreview, // Preview de la photo RECADRÉE
       videoPreview: videoPreview || undefined,
       message,
+      signature: '',
       quantity: 1,
       isGift: false
     }
